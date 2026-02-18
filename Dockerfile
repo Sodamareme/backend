@@ -1,13 +1,15 @@
 # ===============================
 # STAGE 1 — BUILD
 # ===============================
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder  # upgrade node pour éviter warnings
 
 WORKDIR /app
 
-# Installer dépendances
+# Copier package.json et package-lock.json seulement
 COPY package*.json ./
-RUN npm ci
+
+# Installer dépendances
+RUN npm install
 
 # Copier tout le code
 COPY . .
@@ -21,30 +23,24 @@ RUN npm run build
 # Vérification build
 RUN test -f dist/main.js || (echo "Build failed: dist/main.js not found!" && exit 1)
 
-
 # ===============================
 # STAGE 2 — PRODUCTION
 # ===============================
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Copier uniquement package files et installer prod deps
+# Copier package.json + lockfile
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
-# Copier Prisma généré
+# Copier Prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copier le build NestJS
 COPY --from=builder /app/dist ./dist
-
-# Copier les fichiers nécessaires si tu en as (ex: prisma/schema.prisma, .env si besoin)
-COPY --from=builder /app/prisma ./prisma
-
-# Vérification finale (dist/main.js)
-RUN test -f dist/main.js || (echo "PROD: dist/main.js missing!" && exit 1)
+COPY --from=builder /app/prisma ./prisma  # si tu as un dossier prisma
 
 # Exposer port
 EXPOSE 3000
@@ -52,9 +48,9 @@ EXPOSE 3000
 # Variables prod
 ENV NODE_ENV=production
 
-# Healthcheck pour CapRover
+# Healthcheck CapRover
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD node -e "require('http').get('http://localhost:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://localhost:3000', r => process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-# Démarrage production
+# Démarrage prod
 CMD ["node", "dist/main.js"]
