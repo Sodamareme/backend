@@ -9,10 +9,10 @@ RUN npm install
 
 COPY . .
 
-# ✅ Générer Prisma Client
+# Générer Prisma Client
 RUN npx prisma generate
 
-# ✅ Build Nest
+# Build Nest
 RUN npm run build
 
 
