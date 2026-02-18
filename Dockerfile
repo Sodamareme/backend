@@ -3,17 +3,20 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Installer pnpm
+RUN npm install -g pnpm
 
-RUN npm install
+COPY package.json pnpm-lock.yaml ./
+
+RUN pnpm install
 
 COPY . .
 
 # Générer Prisma Client
-RUN npx prisma generate
+RUN pnpm prisma generate
 
 # Build Nest
-RUN npm run build
+RUN pnpm build
 
 
 # ---------- STAGE 2 : PRODUCTION ----------
@@ -21,11 +24,13 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+RUN npm install -g pnpm
 
-RUN npm install --omit=dev
+COPY package.json pnpm-lock.yaml ./
 
-# Copier prisma schema (important)
+RUN pnpm install --prod
+
+# Copier Prisma généré
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
@@ -33,5 +38,7 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
+
+ENV NODE_ENV=production
 
 CMD ["node", "dist/main.js"]
