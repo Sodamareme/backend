@@ -1,17 +1,15 @@
 # ===============================
 # STAGE 1 — BUILD
 # ===============================
-FROM node:20-alpine AS builder  # upgrade node pour éviter warnings
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copier package.json et package-lock.json seulement
-COPY package*.json ./
-
 # Installer dépendances
+COPY package*.json ./
 RUN npm install
 
-# Copier tout le code
+# Copier le reste du projet
 COPY . .
 
 # Générer Prisma Client
@@ -20,37 +18,30 @@ RUN npx prisma generate
 # Build NestJS (génère dist/)
 RUN npm run build
 
-# Vérification build
-RUN test -f dist/main.js || (echo "Build failed: dist/main.js not found!" && exit 1)
 
 # ===============================
 # STAGE 2 — PRODUCTION
 # ===============================
-FROM node:20-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Copier package.json + lockfile
+# Installer uniquement dépendances prod
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copier Prisma
+# Copier Prisma généré
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Copier le build NestJS
+# Copier build compilé
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma  # si tu as un dossier prisma
 
 # Exposer port
 EXPOSE 3000
 
-# Variables prod
+# Variables production
 ENV NODE_ENV=production
 
-# Healthcheck CapRover
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD node -e "require('http').get('http://localhost:3000', r => process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
-
-# Démarrage prod
+# Démarrage propre
 CMD ["node", "dist/main.js"]
