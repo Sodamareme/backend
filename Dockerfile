@@ -9,6 +9,10 @@ RUN npm install
 
 COPY . .
 
+# ✅ Générer Prisma Client
+RUN npx prisma generate
+
+# ✅ Build Nest
 RUN npm run build
 
 
@@ -21,6 +25,11 @@ COPY package*.json ./
 
 RUN npm install --omit=dev
 
+# Copier prisma schema (important)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Copier build
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
