@@ -1,49 +1,36 @@
-# =========================
-# Stage 1 — Builder
-# =========================
+# ---------- STAGE 1 : BUILD ----------
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+COPY package*.json ./
 
-# Copier fichiers dépendances
-COPY package.json pnpm-lock.yaml ./
+RUN npm install
 
-RUN pnpm install
-
-# Copier le reste du code
 COPY . .
 
-# Générer Prisma Client
+# ✅ Générer Prisma Client
 RUN npx prisma generate
 
-# Build NestJS (crée dist/)
-RUN pnpm run build
+# ✅ Build Nest
+RUN npm run build
 
 
-
-# =========================
-# Stage 2 — Production
-# =========================
+# ---------- STAGE 2 : PRODUCTION ----------
 FROM node:18-alpine
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+COPY package*.json ./
 
-# Copier uniquement les dépendances prod
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod
+RUN npm install --omit=dev
 
-# Copier le build
-COPY --from=builder /app/dist ./dist
-
-# Copier prisma (si migrations utilisées)
-COPY --from=builder /app/prisma ./prisma
-
-# Copier node_modules généré avec prisma client
+# Copier prisma schema (important)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Copier build
+COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
