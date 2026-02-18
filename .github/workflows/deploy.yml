@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy Backend to CapRover
 
 on:
   push:
@@ -8,10 +8,18 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: caprover/deploy-from-github@v1.1.2
-        with:
-          server: https://captain.labs.odc.sn.gestionecoleodc.com
-          app: backend
-          token: ${{ secrets.CAPROVER_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install CapRover CLI
+        run: npm install -g caprover
+
+      - name: Deploy to CapRover
+        run: |
+          caprover deploy \
+            --caproverUrl ${{ secrets.CAPROVER_SERVER }} \
+            --appName ${{ secrets.CAPROVER_APP }} \
+            --appToken ${{ secrets.CAPROVER_TOKEN }} \
+            --branch main
