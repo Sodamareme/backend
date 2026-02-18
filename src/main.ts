@@ -6,47 +6,52 @@ import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
-  const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: ['http://localhost:3001', 'http://localhost:3000'],
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    },
-  });
 
-  // Enable CORS
-  // In your NestJS backend main.ts
+  const app = await NestFactory.create(AppModule);
+
+  // ✅ CORS PRODUCTION + DEV
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://gestionecoleodc.com',          // frontend prod
+      'https://www.gestionecoleodc.com'
+    ],
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Increase the payload size limit for file uploads
+  // ✅ Payload size (upload images)
   app.use(bodyParser.json({ limit: '50mb' }));
   app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
-  // Global validation pipe
-  app.useGlobalPipes(new ValidationPipe({
-    transform: true,
-    whitelist: true,
-  }));
+  // ✅ Validation globale
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
 
-  // Swagger configuration
-  const config = new DocumentBuilder()
-    .setTitle('Sonatel Academy API')
-    .setDescription('API de gestion de Sonatel Academy')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  // ✅ Swagger (désactivable en prod si tu veux plus de sécurité)
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Sonatel Academy API')
+      .setDescription('API de gestion')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
 
-  await app.listen(3000);
-  logger.log(`Application is running on: ${await app.getUrl()}`);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document);
+  }
+
+  // ✅ IMPORTANT pour CapRover
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+
+  logger.log(`Application running on port: ${port}`);
 }
+
 bootstrap();
