@@ -44,4 +44,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # Démarrage propre
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
