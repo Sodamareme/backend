@@ -9,34 +9,42 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // ✅ CORS PRODUCTION + DEV SAFE
+  // ===============================
+  // ✅ CORS PRODUCTION SAFE
+  // ===============================
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'https://gestionecoleodc.com',
-    'https://www.gestionecoleodc.com'
+    'https://www.gestionecoleodc.com',
   ];
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Postman / server-to-server
+      // Autoriser requêtes serveur → serveur (Postman, etc.)
+      if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
+        return callback(null, true);
       }
+
+      logger.warn(`Blocked by CORS: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
+  // ===============================
   // ✅ Payload limit
+  // ===============================
   app.use(bodyParser.json({ limit: '50mb' }));
   app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
-  // ✅ Validation
+  // ===============================
+  // ✅ Global Validation
+  // ===============================
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -44,7 +52,9 @@ async function bootstrap() {
     }),
   );
 
-  // ✅ Swagger (désactivé en prod si tu veux)
+  // ===============================
+  // ✅ Swagger (dev only)
+  // ===============================
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('Sonatel Academy API')
@@ -57,13 +67,14 @@ async function bootstrap() {
     SwaggerModule.setup('api', app, document);
   }
 
-  // ✅ IMPORTANT pour CapRover
-  const port = process.env.PORT || 3000;
-  //await app.listen(port, '0.0.0.0');
-  await app.listen(process.env.PORT || 3000, '0.0.0.0');
+  // ===============================
+  // ✅ CAPROVER SAFE PORT
+  // ===============================
+  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 
+  await app.listen(port, '0.0.0.0');
 
-  logger.log(`Application running on port: ${port}`);
+  logger.log(`🚀 Server running on http://0.0.0.0:${port}`);
 }
 
 bootstrap();
