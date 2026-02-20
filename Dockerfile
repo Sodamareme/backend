@@ -1,9 +1,12 @@
 # ===============================
 # STAGE 1 — BUILD
 # ===============================
-FROM node:18-alpine AS builder
+FROM node:18--slim AS builder
 
 WORKDIR /app
+
+# Installer OpenSSL
+RUN apt-get update -y && apt-get install -y openssl
 
 # Installer dépendances
 COPY package*.json ./
@@ -22,9 +25,12 @@ RUN npm run build
 # ===============================
 # STAGE 2 — PRODUCTION
 # ===============================
-FROM node:18-alpine
+FROM node:18--slim
 
 WORKDIR /app
+
+# Installer OpenSSL (important pour Prisma runtime)
+RUN apt-get update -y && apt-get install -y openssl
 
 # Installer uniquement dépendances prod
 COPY package*.json ./
