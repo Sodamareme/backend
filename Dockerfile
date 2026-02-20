@@ -1,7 +1,7 @@
 # ===============================
 # STAGE 1 — BUILD
 # ===============================
-FROM node:18--slim AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN npm run build
 # ===============================
 # STAGE 2 — PRODUCTION
 # ===============================
-FROM node:18--slim
+FROM node:18-slim
 
 WORKDIR /app
 
