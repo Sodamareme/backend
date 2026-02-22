@@ -10,125 +10,125 @@ export declare class CoachesService {
     private readonly logger;
     constructor(prisma: PrismaService, emailService: EmailService, cloudinary: CloudinaryService);
     findAll(): Promise<({
+        user: {
+            id: string;
+            email: string;
+            role: import(".prisma/client").$Enums.UserRole;
+        };
         referential: {
             id: string;
             name: string;
             description: string;
         };
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        firstName: string;
+        lastName: string;
+        phone: string | null;
+        userId: string;
+        photoUrl: string | null;
+        matricule: string;
+        qrCode: string | null;
+        refId: string | null;
+    })[]>;
+    findOne(id: string): Promise<{
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
-    } & {
-        id: string;
-        firstName: string;
-        lastName: string;
-        phone: string | null;
-        photoUrl: string | null;
-        userId: string;
-        refId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        matricule: string;
-        qrCode: string | null;
-    })[]>;
-    findOne(id: string): Promise<{
         referential: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
             sessionLength: number | null;
         };
-        user: {
-            id: string;
-            email: string;
-            role: import(".prisma/client").$Enums.UserRole;
-        };
         modules: {
             id: string;
-            photoUrl: string | null;
-            refId: string;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
+            refId: string;
+            sessionId: string | null;
             description: string | null;
             startDate: Date;
             endDate: Date;
             coachId: string;
-            sessionId: string | null;
         }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        refId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
+        refId: string | null;
     }>;
     create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File): Promise<{
+        user: {
+            id: string;
+            email: string;
+            role: import(".prisma/client").$Enums.UserRole;
+        };
         referential: {
             id: string;
             name: string;
             description: string;
         };
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        firstName: string;
+        lastName: string;
+        phone: string | null;
+        userId: string;
+        photoUrl: string | null;
+        matricule: string;
+        qrCode: string | null;
+        refId: string | null;
+    }>;
+    update(id: string, updateCoachDto: UpdateCoachDto, photoFile?: Express.Multer.File): Promise<{
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
-    } & {
-        id: string;
-        firstName: string;
-        lastName: string;
-        phone: string | null;
-        photoUrl: string | null;
-        userId: string;
-        refId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        matricule: string;
-        qrCode: string | null;
-    }>;
-    update(id: string, updateCoachDto: UpdateCoachDto, photoFile?: Express.Multer.File): Promise<{
         referential: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
             sessionLength: number | null;
         };
-        user: {
-            id: string;
-            email: string;
-            role: import(".prisma/client").$Enums.UserRole;
-        };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        refId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
+        refId: string | null;
     }>;
     remove(id: string): Promise<{
         success: boolean;
@@ -181,33 +181,33 @@ export declare class CoachesService {
         updatedAt: Date;
         coachId: string;
         date: Date;
-        checkIn: Date | null;
-        checkOut: Date | null;
         isPresent: boolean;
         isLate: boolean;
+        checkIn: Date | null;
+        checkOut: Date | null;
     })[]>;
     findByUserId(userId: string): Promise<{
-        referential: {
-            id: string;
-            name: string;
-        };
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
+        referential: {
+            id: string;
+            name: string;
+        };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        refId: string | null;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
+        refId: string | null;
     }>;
     getCoachAttendanceHistory(coachId: string, startDate: Date, endDate: Date): Promise<{
         id: string;
@@ -245,10 +245,10 @@ export declare class CoachesService {
     getTodayAttendanceForCoach(coachId: string, today: Date): Promise<{
         id: string;
         date: Date;
-        checkIn: Date;
-        checkOut: Date;
         isPresent: boolean;
         isLate: boolean;
+        checkIn: Date;
+        checkOut: Date;
     }>;
     private generateMatricule;
     private generateRandomPassword;

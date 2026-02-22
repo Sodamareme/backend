@@ -7,18 +7,25 @@ const app_module_1 = require("./app.module");
 const bodyParser = require("body-parser");
 async function bootstrap() {
     const logger = new common_1.Logger('Bootstrap');
-    const app = await core_1.NestFactory.create(app_module_1.AppModule, {
-        cors: {
-            origin: ['http://localhost:3001', 'http://localhost:3000'],
-            credentials: true,
-            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-            allowedHeaders: ['Content-Type', 'Authorization'],
-        },
-    });
+    const app = await core_1.NestFactory.create(app_module_1.AppModule);
+    const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://gestionecoleodc.com',
+        'https://www.gestionecoleodc.com',
+    ];
     app.enableCors({
-        origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        origin: (origin, callback) => {
+            if (!origin)
+                return callback(null, true);
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            logger.warn(`Blocked by CORS: ${origin}`);
+            return callback(new Error('Not allowed by CORS'));
+        },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     });
     app.use(bodyParser.json({ limit: '50mb' }));
@@ -27,16 +34,19 @@ async function bootstrap() {
         transform: true,
         whitelist: true,
     }));
-    const config = new swagger_1.DocumentBuilder()
-        .setTitle('Sonatel Academy API')
-        .setDescription('API de gestion de Sonatel Academy')
-        .setVersion('1.0')
-        .addBearerAuth()
-        .build();
-    const document = swagger_1.SwaggerModule.createDocument(app, config);
-    swagger_1.SwaggerModule.setup('api', app, document);
-    await app.listen(3000);
-    logger.log(`Application is running on: ${await app.getUrl()}`);
+    if (process.env.NODE_ENV !== 'production') {
+        const config = new swagger_1.DocumentBuilder()
+            .setTitle('Sonatel Academy API')
+            .setDescription('API de gestion')
+            .setVersion('1.0')
+            .addBearerAuth()
+            .build();
+        const document = swagger_1.SwaggerModule.createDocument(app, config);
+        swagger_1.SwaggerModule.setup('api', app, document);
+    }
+    const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+    await app.listen(port, '0.0.0.0');
+    logger.log(`🚀 Server running on http://0.0.0.0:${port}`);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

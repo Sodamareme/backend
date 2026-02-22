@@ -18,36 +18,36 @@ export declare class AttendanceController {
     submitJustification(id: string, justification: string, document?: Express.Multer.File): Promise<{
         learner: {
             id: string;
-            status: import(".prisma/client").$Enums.LearnerStatus;
             createdAt: Date;
             updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
+            refId: string | null;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
-            qrCode: string;
-            userId: string;
-            refId: string | null;
+            status: import(".prisma/client").$Enums.LearnerStatus;
             promotionId: string;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         documentUrl: string | null;
-        learnerId: string;
-        createdAt: Date;
-        updatedAt: Date;
         justificationComment: string | null;
     }>;
     updateAbsenceStatus(id: string, updateStatusDto: {
@@ -55,16 +55,16 @@ export declare class AttendanceController {
         comment?: string;
     }): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         documentUrl: string | null;
-        learnerId: string;
-        createdAt: Date;
-        updatedAt: Date;
         justificationComment: string | null;
     }>;
     getLatestScans(): Promise<{
@@ -80,11 +80,11 @@ export declare class AttendanceController {
                 lastName: string;
                 photoUrl: string;
                 matricule: string;
-                promotion: {
+                referential: {
                     id: string;
                     name: string;
                 };
-                referential: {
+                promotion: {
                     id: string;
                     name: string;
                 };
