@@ -37,6 +37,8 @@ import {
 import { BulkImportResponseDto } from './dto/BulkImportResponseDto';
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
+import { CreateLearnerDto } from './dto/create-learner.dto';
+import { CreateTutorDto } from './dto/create-learner.dto';
 @ApiTags('learners')
 @Controller('learners')
 //  @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,9 +52,87 @@ export class LearnersController {
   @ApiOperation({ summary: 'Créer un nouvel apprenant' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
   @ApiConsumes('multipart/form-data')
-  async create(@Body() data: any, @UploadedFile() photoFile?: Express.Multer.File) {
-    return this.learnersService.create(data, photoFile);
+ // learners.controller.ts
+
+@Post()
+@UseInterceptors(FileInterceptor('photoFile'))
+@ApiOperation({ summary: 'Créer un nouvel apprenant' })
+@ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
+@ApiConsumes('multipart/form-data')
+async create(
+  @Body() data: any,
+  @UploadedFile() photoFile?: Express.Multer.File,
+) {
+  console.log('=== BODY BRUT REÇU ===', JSON.stringify(data, null, 2));
+
+  // Reconstruire l'objet tutor depuis toutes les notations possibles
+  // (multipart envoie: "tutor[firstName]", "tutor.firstName", ou objet imbriqué)
+  let tutor: any = {};
+
+  if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
+    // Cas idéal : tutor est déjà un objet propre
+    tutor = data.tutor;
+  } else {
+    // Cas multipart : les clés arrivent à plat
+    tutor = {
+      firstName:
+        data['tutor[firstName]'] ||
+        data['tutor.firstName'] ||
+        data?.tutor?.firstName ||
+        '',
+      lastName:
+        data['tutor[lastName]'] ||
+        data['tutor.lastName'] ||
+        data?.tutor?.lastName ||
+        '',
+      phone:
+        data['tutor[phone]'] ||
+        data['tutor.phone'] ||
+        data?.tutor?.phone ||
+        '',
+      email:
+        data['tutor[email]'] ||
+        data['tutor.email'] ||
+        data?.tutor?.email ||
+        '',
+      address:
+        data['tutor[address]'] ||
+        data['tutor.address'] ||
+        data?.tutor?.address ||
+        '',
+    };
   }
+
+  console.log('=== TUTOR RECONSTRUIT ===', tutor);
+
+  // Valider que le tutor a les champs requis
+  if (!tutor.firstName || !tutor.lastName || !tutor.phone) {
+    throw new BadRequestException(
+      'Les informations du tuteur sont incomplètes (firstName, lastName, phone requis)',
+    );
+  }
+
+  // Construire le DTO propre
+  const cleanDto: CreateLearnerDto = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    phone: data.phone,
+    address: data.address,
+    gender: data.gender,
+    birthDate: data.birthDate,
+    birthPlace: data.birthPlace,
+    promotionId: data.promotionId,
+    refId: data.refId || undefined,
+    sessionId: data.sessionId || undefined,
+    status: data.status || undefined,
+    tutor,
+  };
+
+  console.log('=== DTO PROPRE ENVOYÉ AU SERVICE ===', JSON.stringify(cleanDto, null, 2));
+
+  return this.learnersService.create(cleanDto, photoFile);
+}
 
   @Post('bulk-validate')
   @Roles(UserRole.ADMIN)

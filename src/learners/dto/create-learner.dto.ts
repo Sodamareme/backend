@@ -1,87 +1,83 @@
-import { IsString, IsEmail, IsEnum, IsDate, IsOptional, IsBoolean, ValidateNested } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import { LearnerStatus } from '@prisma/client';
 
 export class CreateTutorDto {
-  @ApiProperty({ description: 'First name of the tutor' })
+  @ApiProperty()
   @IsString()
   firstName: string;
 
-  @ApiProperty({ description: 'Last name of the tutor' })
+  @ApiProperty()
   @IsString()
   lastName: string;
 
-  @ApiProperty({ description: 'Phone number of the tutor' })
+  @ApiProperty()
   @IsString()
   phone: string;
 
-  @ApiPropertyOptional({ description: 'Email address of the tutor' })
+  @ApiPropertyOptional()
   @IsEmail()
   @IsOptional()
   email?: string;
 
-  @ApiPropertyOptional({ description: 'Address of the tutor' })
+  @ApiPropertyOptional()
   @IsString()
   @IsOptional()
   address?: string;
 }
 
 export class CreateLearnerDto {
-  @ApiProperty({ description: 'First name of the learner' })
+  @ApiProperty()
   @IsString()
   firstName: string;
 
-  @ApiProperty({ description: 'Last name of the learner' })
+  @ApiProperty()
   @IsString()
   lastName: string;
 
-  @ApiProperty({ description: 'Email address of the learner' })
+  @ApiProperty()
   @IsEmail()
   email: string;
 
-  @ApiProperty({ description: 'Phone number of the learner' })
+  @ApiProperty()
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Address of the learner' })
+  @ApiProperty()
   @IsString()
   address: string;
 
-  @ApiProperty({ description: 'Gender of the learner' })
+  @ApiProperty()
   @IsString()
   gender: string;
 
-  @ApiProperty({ description: 'Birth date of the learner' })
-  @Type(() => Date)
-  @IsDate()
-  birthDate: Date;
+  @ApiProperty()
+  @IsString()
+  birthDate: string; // ← string, pas Date (multipart ne peut pas transformer)
 
-  @ApiProperty({ description: 'Birth place of the learner' })
+  @ApiProperty()
   @IsString()
   birthPlace: string;
 
-  @ApiProperty({ description: 'Promotion ID' })
+  @ApiProperty()
   @IsString()
   promotionId: string;
 
-  @ApiPropertyOptional({ description: 'Referential ID' })
+  @ApiPropertyOptional()
   @IsString()
   @IsOptional()
   refId?: string;
 
-  @ApiPropertyOptional({ description: 'Session ID (required for multi-session referentials)' })
+  @ApiPropertyOptional()
   @IsString()
   @IsOptional()
   sessionId?: string;
 
-  @ApiPropertyOptional({ description: 'Learner status' })
+  @ApiPropertyOptional()
   @IsEnum(LearnerStatus)
   @IsOptional()
   status?: LearnerStatus;
 
-  @ApiProperty({ description: 'Tutor information' })
-  @ValidateNested()
-  @Type(() => CreateTutorDto)
+  // PAS de @ValidateNested ni @Type ici — géré manuellement dans le controller
   tutor: CreateTutorDto;
 }

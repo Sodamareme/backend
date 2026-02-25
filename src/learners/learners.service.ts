@@ -527,119 +527,111 @@ if (learner.birthDate) {
   }
 
   // Méthodes existantes (conservées)
-  async create(createLearnerDto: CreateLearnerDto, photoFile?: Express.Multer.File): Promise<Learner> {
-    return this.prisma.$transaction(async (prisma) => {
-      // First, verify promotion and referential relationship
+ async create(
+  createLearnerDto: CreateLearnerDto,
+  photoFile?: Express.Multer.File,
+): Promise<Learner> {
+  console.log('=== SERVICE CREATE - données reçues ===');
+  console.log('firstName:', createLearnerDto.firstName);
+  console.log('tutor:', JSON.stringify(createLearnerDto.tutor));
+  console.log('promotionId:', createLearnerDto.promotionId);
+  console.log('birthDate:', createLearnerDto.birthDate);
+
+  return this.prisma.$transaction(
+    async (prisma) => {
+      // 1. Vérifier la promotion
       const promotion = await prisma.promotion.findUnique({
         where: { id: createLearnerDto.promotionId },
-        include: {
-          referentials: true
-        }
+        include: { referentials: true },
       });
 
       if (!promotion) {
         throw new NotFoundException('Promotion not found');
       }
 
-      // Check if referential is provided and exists in promotion
+      // 2. Vérifier le référentiel si fourni
       if (createLearnerDto.refId) {
         const referentialExists = promotion.referentials.some(
-          ref => ref.id === createLearnerDto.refId
+          (ref) => ref.id === createLearnerDto.refId,
         );
 
         if (!referentialExists) {
           throw new BadRequestException(
-            `The referential with ID ${createLearnerDto.refId} is not associated with the promotion ${promotion.name}`
+            `The referential with ID ${createLearnerDto.refId} is not associated with the promotion ${promotion.name}`,
           );
         }
 
-        // Now fetch the referential with sessions for further validation
         const referential = await prisma.referential.findUnique({
           where: { id: createLearnerDto.refId },
-          include: { 
-            sessions: {
-              select: {
-                id: true,
-                name: true,
-                capacity: true
-              }
-            }
-          }
+          include: {
+            sessions: { select: { id: true, name: true, capacity: true } },
+          },
         });
 
         if (!referential) {
           throw new NotFoundException('Referential not found');
         }
 
-        // Validate sessions if multiple sessions exist
         if (referential.numberOfSessions > 1) {
           if (!createLearnerDto.sessionId) {
             throw new BadRequestException(
-              `This referential has multiple sessions. Please specify a sessionId. Available sessions: ${referential.sessions.map(s => s.name).join(', ')}`
+              `This referential has multiple sessions. Please specify a sessionId. Available: ${referential.sessions.map((s) => s.name).join(', ')}`,
             );
           }
 
-          const session = referential.sessions.find(s => s.id === createLearnerDto.sessionId);
+          const session = referential.sessions.find(
+            (s) => s.id === createLearnerDto.sessionId,
+          );
           if (!session) {
             throw new BadRequestException(
-              `Invalid session ID. Available sessions for this referential: ${referential.sessions.map(s => s.name).join(', ')}`
+              `Invalid session ID. Available: ${referential.sessions.map((s) => s.name).join(', ')}`,
             );
           }
 
-          // Check session capacity
           const sessionLearnerCount = await prisma.learner.count({
-            where: { sessionId: createLearnerDto.sessionId }
+            where: { sessionId: createLearnerDto.sessionId },
           });
 
           if (sessionLearnerCount >= session.capacity) {
             throw new BadRequestException(
-              `Session ${session.name} has reached its maximum capacity of ${session.capacity} learners`
+              `Session ${session.name} has reached its maximum capacity of ${session.capacity} learners`,
             );
           }
         } else if (createLearnerDto.sessionId) {
           throw new BadRequestException(
-            'Session ID should not be provided for single-session referentials'
+            'Session ID should not be provided for single-session referentials',
           );
         }
       }
 
-      // Generate matricule first
-      const referential = createLearnerDto.refId ? 
-        await prisma.referential.findUnique({ where: { id: createLearnerDto.refId } }) 
+      // 3. Générer le matricule
+      const referential = createLearnerDto.refId
+        ? await prisma.referential.findUnique({
+            where: { id: createLearnerDto.refId },
+          })
         : null;
 
       const matricule = await MatriculeUtils.generateLearnerMatricule(
         prisma as PrismaClient,
         createLearnerDto.firstName,
         createLearnerDto.lastName,
-        referential?.name
+        referential?.name,
       );
 
-      // Vérifier que le matricule est généré
       if (!matricule) {
         throw new BadRequestException('Failed to generate matricule for learner');
       }
 
-      this.logger.log(`Generated matricule: ${matricule} for learner ${createLearnerDto.firstName} ${createLearnerDto.lastName}`);
+      this.logger.log(`Generated matricule: ${matricule}`);
 
-      // Variables pour stocker les URLs
-      let photoUrl: string | undefined;
+      // 4. Générer le QR code (sans bloquer si erreur)
       let qrCodeUrl: string | undefined;
-
-      // Générer et uploader le QR code - avec gestion d'erreur améliorée
       try {
-        this.logger.log('Starting QR code generation...');
-        
         const qrCodeBuffer = await QRCode.toBuffer(matricule, {
           width: 200,
           margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
+          color: { dark: '#000000', light: '#FFFFFF' },
         });
-
-        this.logger.log(`QR code buffer generated, size: ${qrCodeBuffer.length} bytes`);
 
         const qrCodeFile = {
           fieldname: 'qrCode',
@@ -654,58 +646,27 @@ if (learner.birthDate) {
           path: '',
         } as Express.Multer.File;
 
-        this.logger.log('Uploading QR code to Cloudinary...');
         const qrCodeResult = await this.cloudinary.uploadFile(qrCodeFile, 'qrcodes');
         qrCodeUrl = qrCodeResult.url;
-        this.logger.log(`QR code uploaded successfully: ${qrCodeUrl}`);
-
+        this.logger.log(`QR code uploaded: ${qrCodeUrl}`);
       } catch (error) {
-        this.logger.error('QR code generation/upload failed:', error);
-        
-        // Option: Continuer sans QR code mais logger l'erreur
-        this.logger.warn(`Continuing learner creation without QR code for matricule: ${matricule}`);
-        // Alternativement, vous pouvez lancer une erreur pour arrêter le processus:
-        // throw new BadRequestException(`Failed to generate QR code: ${error.message}`);
+        // ✅ NE PAS throw ici — on continue sans QR code
+        this.logger.warn(`QR code generation failed, continuing without it: ${error.message}`);
       }
 
-      // Handle photo upload
+      // 5. Upload photo (sans bloquer si erreur)
+      let photoUrl: string | undefined;
       if (photoFile) {
         try {
-          this.logger.log('Uploading learner photo...');
           const result = await this.cloudinary.uploadFile(photoFile, 'learners');
           photoUrl = result.url;
-          this.logger.log(`Photo uploaded successfully: ${photoUrl}`);
+          this.logger.log(`Photo uploaded: ${photoUrl}`);
         } catch (error) {
-          this.logger.error('Failed to upload photo:', error);
-          this.logger.warn('Continuing learner creation without photo');
+          this.logger.warn(`Photo upload failed, continuing without it: ${error.message}`);
         }
       }
 
-      // Validate session assignment (validation déjà faite plus haut, on garde pour sécurité)
-      if (createLearnerDto.refId) {
-        const referential = await prisma.referential.findUnique({
-          where: { id: createLearnerDto.refId },
-          include: { sessions: true }
-        });
-
-        if (!referential) {
-          throw new NotFoundException('Referential not found');
-        }
-
-        if (referential.numberOfSessions > 1) {
-          if (!createLearnerDto.sessionId) {
-            throw new BadRequestException('Session ID is required for multi-session referentials');
-          }
-
-          // Verify session belongs to referential
-          const sessionExists = referential.sessions.some(s => s.id === createLearnerDto.sessionId);
-          if (!sessionExists) {
-            throw new BadRequestException('Invalid session ID for this referential');
-          }
-        }
-      }
-
-      // Check for existing learner
+      // 6. Vérifier doublons
       const existingLearner = await prisma.learner.findFirst({
         where: {
           OR: [
@@ -721,13 +682,11 @@ if (learner.birthDate) {
         );
       }
 
-      // Generate password for the new learner
+      // 7. Générer mot de passe
       const password = AuthUtils.generatePassword();
       const hashedPassword = await AuthUtils.hashPassword(password);
 
-      this.logger.log(`Creating learner with matricule: ${matricule}, QR code: ${qrCodeUrl ? 'YES' : 'NO'}`);
-
-      // Create learner only if all validations pass
+      // 8. Créer l'apprenant
       const learner = await prisma.learner.create({
         data: {
           matricule,
@@ -735,11 +694,11 @@ if (learner.birthDate) {
           lastName: createLearnerDto.lastName,
           address: createLearnerDto.address,
           gender: createLearnerDto.gender as Gender,
-          birthDate: createLearnerDto.birthDate,
+          birthDate: new Date(createLearnerDto.birthDate), // ✅ conversion string → Date
           birthPlace: createLearnerDto.birthPlace,
           phone: createLearnerDto.phone,
           photoUrl,
-          qrCode: qrCodeUrl, // Important: s'assurer que c'est bien défini
+          qrCode: qrCodeUrl,
           status: createLearnerDto.status || LearnerStatus.ACTIVE,
           user: {
             create: {
@@ -753,33 +712,25 @@ if (learner.birthDate) {
               firstName: createLearnerDto.tutor.firstName,
               lastName: createLearnerDto.tutor.lastName,
               phone: createLearnerDto.tutor.phone,
-              email: createLearnerDto.tutor.email,
-              address: createLearnerDto.tutor.address,
+              email: createLearnerDto.tutor.email || '',
+              address: createLearnerDto.tutor.address || '',
             },
           },
-          promotion: {
-            connect: {
-              id: createLearnerDto.promotionId
-            }
-          },
-          referential: createLearnerDto.refId ? {
-            connect: {
-              id: createLearnerDto.refId
-            }
-          } : undefined,
+          promotion: { connect: { id: createLearnerDto.promotionId } },
+          referential: createLearnerDto.refId
+            ? { connect: { id: createLearnerDto.refId } }
+            : undefined,
           kit: {
             create: {
               laptop: false,
               charger: false,
               bag: false,
-              polo: false
-            }
+              polo: false,
+            },
           },
-          session: createLearnerDto.sessionId ? {
-            connect: {
-              id: createLearnerDto.sessionId
-            }
-          } : undefined,
+          session: createLearnerDto.sessionId
+            ? { connect: { id: createLearnerDto.sessionId } }
+            : undefined,
         },
         include: {
           user: true,
@@ -788,37 +739,40 @@ if (learner.birthDate) {
           tutor: true,
           kit: true,
           statusHistory: true,
-          session: true
-        }
+          session: true,
+        },
       });
 
-      // Logger le résultat pour debug
-      this.logger.log(`Learner created successfully - ID: ${learner.id}, Matricule: ${learner.matricule}, QR code URL: ${learner.qrCode || 'NOT SET'}`);
+      this.logger.log(`Learner created: ${learner.id} - ${learner.matricule}`);
 
-      // Create initial status history
+      // 9. Historique de statut initial
       await prisma.learnerStatusHistory.create({
         data: {
           learnerId: learner.id,
           newStatus: learner.status,
           reason: 'Initial status on creation',
-          date: new Date()
-        }
+          date: new Date(),
+        },
       });
 
-      // Send password email with the plain text password
+      // 10. Email (sans bloquer si erreur)
       try {
-        await AuthUtils.sendPasswordEmail(createLearnerDto.email, password, 'Apprenant');
+        await AuthUtils.sendPasswordEmail(
+          createLearnerDto.email,
+          password,
+          'Apprenant',
+        );
         this.logger.log(`Password email sent to: ${createLearnerDto.email}`);
       } catch (emailError) {
-        this.logger.error('Failed to send password email:', emailError);
-        // Ne pas faire échouer la création pour un problème d'email
+        // ✅ NE PAS throw ici
+        this.logger.error('Failed to send password email:', emailError.message);
       }
 
       return learner;
-    }, {
-      timeout: 30000 // Augmenter le timeout à 30 secondes
-    });
-  }
+    },
+    { timeout: 30000 },
+  );
+}
 
   // Méthodes existantes conservées...
   async regenerateQrCode(learnerId: string): Promise<string> {
