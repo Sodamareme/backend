@@ -46,14 +46,6 @@ import { CreateTutorDto } from './dto/create-learner.dto';
 export class LearnersController {
   constructor(private readonly learnersService: LearnersService) {}
 
-  @Post()
-  // @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('photoFile'))
-  @ApiOperation({ summary: 'Créer un nouvel apprenant' })
-  @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
-  @ApiConsumes('multipart/form-data')
- // learners.controller.ts
-
 @Post()
 @UseInterceptors(FileInterceptor('photoFile'))
 @ApiOperation({ summary: 'Créer un nouvel apprenant' })
