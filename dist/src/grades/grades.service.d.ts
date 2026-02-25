@@ -19,9 +19,9 @@ export declare class GradesService {
             id: string;
             name: string;
             refId: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -44,9 +44,9 @@ export declare class GradesService {
         module: {
             id: string;
             name: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -115,9 +115,9 @@ export declare class GradesService {
         module: {
             id: string;
             name: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -143,9 +143,9 @@ export declare class GradesService {
             name: string;
             photoUrl: string;
             refId: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
             coachId: string;
         };
     } & {

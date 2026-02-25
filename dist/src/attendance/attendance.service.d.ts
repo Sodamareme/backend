@@ -119,9 +119,9 @@ export declare class AttendanceService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
-        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
@@ -288,9 +288,9 @@ export declare class AttendanceService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
-        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
@@ -327,8 +327,8 @@ export declare class AttendanceService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        coachId: string;
         date: Date;
+        coachId: string;
         isPresent: boolean;
         isLate: boolean;
         checkIn: Date | null;
@@ -355,9 +355,9 @@ export declare class AttendanceService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
-        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;

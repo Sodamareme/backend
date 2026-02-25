@@ -36,8 +36,8 @@ export declare class MealScansController {
         };
     } & {
         id: string;
-        type: import(".prisma/client").$Enums.MealType;
         learnerId: string;
+        type: import(".prisma/client").$Enums.MealType;
         scannedAt: Date;
         restaurateurId: string;
     }>;
@@ -56,8 +56,8 @@ export declare class MealScansController {
         };
     } & {
         id: string;
-        type: import(".prisma/client").$Enums.MealType;
         learnerId: string;
+        type: import(".prisma/client").$Enums.MealType;
         scannedAt: Date;
         restaurateurId: string;
     })[]>;
@@ -65,16 +65,16 @@ export declare class MealScansController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         type: string;
         date: Date;
-        learnerId: string;
     }[]>;
     findByLearnerMatricule(learnerId: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         type: string;
         date: Date;
-        learnerId: string;
     }>;
 }

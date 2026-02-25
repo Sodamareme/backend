@@ -31,7 +31,56 @@ let LearnersController = class LearnersController {
         this.learnersService = learnersService;
     }
     async create(data, photoFile) {
-        return this.learnersService.create(data, photoFile);
+        console.log('=== BODY BRUT REÇU ===', JSON.stringify(data, null, 2));
+        let tutor = {};
+        if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
+            tutor = data.tutor;
+        }
+        else {
+            tutor = {
+                firstName: data['tutor[firstName]'] ||
+                    data['tutor.firstName'] ||
+                    data?.tutor?.firstName ||
+                    '',
+                lastName: data['tutor[lastName]'] ||
+                    data['tutor.lastName'] ||
+                    data?.tutor?.lastName ||
+                    '',
+                phone: data['tutor[phone]'] ||
+                    data['tutor.phone'] ||
+                    data?.tutor?.phone ||
+                    '',
+                email: data['tutor[email]'] ||
+                    data['tutor.email'] ||
+                    data?.tutor?.email ||
+                    '',
+                address: data['tutor[address]'] ||
+                    data['tutor.address'] ||
+                    data?.tutor?.address ||
+                    '',
+            };
+        }
+        console.log('=== TUTOR RECONSTRUIT ===', tutor);
+        if (!tutor.firstName || !tutor.lastName || !tutor.phone) {
+            throw new common_1.BadRequestException('Les informations du tuteur sont incomplètes (firstName, lastName, phone requis)');
+        }
+        const cleanDto = {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            gender: data.gender,
+            birthDate: data.birthDate,
+            birthPlace: data.birthPlace,
+            promotionId: data.promotionId,
+            refId: data.refId || undefined,
+            sessionId: data.sessionId || undefined,
+            status: data.status || undefined,
+            tutor,
+        };
+        console.log('=== DTO PROPRE ENVOYÉ AU SERVICE ===', JSON.stringify(cleanDto, null, 2));
+        return this.learnersService.create(cleanDto, photoFile);
     }
     async validateBulkImport(file) {
         if (!file) {

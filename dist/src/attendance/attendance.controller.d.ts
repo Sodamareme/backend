@@ -40,9 +40,9 @@ export declare class AttendanceController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
-        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
@@ -57,9 +57,9 @@ export declare class AttendanceController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
-        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;

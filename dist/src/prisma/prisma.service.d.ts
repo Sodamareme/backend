@@ -1,7 +1,6 @@
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@prisma/client';
-export declare class PrismaService extends PrismaClient<Prisma.PrismaClientOptions, 'beforeExit'> implements OnModuleInit, OnModuleDestroy {
-    [x: string]: any;
+import { PrismaClient } from '@prisma/client';
+export declare class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
     private readonly logger;
     private readonly maxRetries;
     private readonly retryDelay;

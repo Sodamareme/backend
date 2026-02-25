@@ -19,8 +19,8 @@ export declare class PendingLearnersController {
         birthPlace: string;
         status: import(".prisma/client").$Enums.PendingStatus;
         promotionId: string;
-        rejectionReason: string | null;
         tutorData: import("@prisma/client/runtime/library").JsonValue;
+        rejectionReason: string | null;
         reviewedAt: Date | null;
         reviewedBy: string | null;
     }>;

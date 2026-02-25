@@ -69,9 +69,9 @@ export declare class MealsService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         type: string;
         date: Date;
-        learnerId: string;
     })[]>;
     getLatestScans(): Promise<({
         learner: {
@@ -120,8 +120,8 @@ export declare class MealsService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        learnerId: string;
         type: string;
         date: Date;
-        learnerId: string;
     })[]>;
 }

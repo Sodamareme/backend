@@ -16,20 +16,21 @@ const client_1 = require("@prisma/client");
 let PrismaService = PrismaService_1 = class PrismaService extends client_1.PrismaClient {
     constructor() {
         super({
-            log: ['query', 'info', 'warn', 'error'],
+            log: [
+                { emit: 'stdout', level: 'query' },
+                { emit: 'stdout', level: 'info' },
+                { emit: 'stdout', level: 'warn' },
+                { emit: 'stdout', level: 'error' },
+            ],
             datasources: {
                 db: {
-                    url: process.env.DATABASE_URL
-                }
-            }
+                    url: process.env.DATABASE_URL,
+                },
+            },
         });
         this.logger = new common_1.Logger(PrismaService_1.name);
         this.maxRetries = 3;
         this.retryDelay = 1000;
-        process.on('beforeExit', () => {
-            this.logger.log('Process beforeExit event');
-            this.$disconnect();
-        });
     }
     async onModuleInit() {
         let retries = 0;
@@ -46,7 +47,7 @@ let PrismaService = PrismaService_1 = class PrismaService extends client_1.Prism
                     this.logger.error('Max retries reached. Unable to connect to database.');
                     throw error;
                 }
-                await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
+                await new Promise((resolve) => setTimeout(resolve, this.retryDelay * retries));
             }
         }
     }

@@ -11,9 +11,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }>;
     findAll(): Promise<{
@@ -24,9 +24,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }[]>;
     getActiveModules(): Promise<{
@@ -37,9 +37,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }[]>;
     getModulesByReferential(refId: string): Promise<{
@@ -50,9 +50,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }[]>;
     findOne(id: string): Promise<{
@@ -63,9 +63,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }>;
     getGradesByModule(id: string): Promise<{
@@ -93,9 +93,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
-        description: string | null;
         startDate: Date;
         endDate: Date;
+        description: string | null;
         coachId: string;
     }>;
     addGrade(moduleId: string, data: {

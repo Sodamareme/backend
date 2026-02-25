@@ -58,9 +58,9 @@ export declare class CoachesService {
             photoUrl: string | null;
             refId: string;
             sessionId: string | null;
-            description: string | null;
             startDate: Date;
             endDate: Date;
+            description: string | null;
             coachId: string;
         }[];
     } & {
@@ -179,8 +179,8 @@ export declare class CoachesService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        coachId: string;
         date: Date;
+        coachId: string;
         isPresent: boolean;
         isLate: boolean;
         checkIn: Date | null;

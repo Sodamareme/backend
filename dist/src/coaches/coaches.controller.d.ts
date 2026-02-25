@@ -189,9 +189,9 @@ export declare class CoachesController {
             photoUrl: string | null;
             refId: string;
             sessionId: string | null;
-            description: string | null;
             startDate: Date;
             endDate: Date;
+            description: string | null;
             coachId: string;
         }[];
     } & {

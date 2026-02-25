@@ -1,28 +1,25 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@prisma/client';
-
+import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService extends PrismaClient<Prisma.PrismaClientOptions, 'beforeExit'> implements OnModuleInit, OnModuleDestroy {
-  [x: string]: any;
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private readonly maxRetries = 3;
-  private readonly retryDelay = 1000; // 1 second
+  private readonly retryDelay = 1000;
 
   constructor() {
     super({
-      log: ['query', 'info', 'warn', 'error'],
+      log: [
+        { emit: 'stdout', level: 'query' },
+        { emit: 'stdout', level: 'info' },
+        { emit: 'stdout', level: 'warn' },
+        { emit: 'stdout', level: 'error' },
+      ],
       datasources: {
         db: {
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-
-    // Add process event listener instead of Prisma beforeExit
-    process.on('beforeExit', () => {
-      this.logger.log('Process beforeExit event');
-      this.$disconnect();
+          url: process.env.DATABASE_URL,
+        },
+      },
     });
   }
 
@@ -37,15 +34,17 @@ export class PrismaService extends PrismaClient<Prisma.PrismaClientOptions, 'bef
         retries++;
         this.logger.error(
           `Failed to connect to database (attempt ${retries}/${this.maxRetries}):`,
-          error
+          error,
         );
-        
+
         if (retries === this.maxRetries) {
           this.logger.error('Max retries reached. Unable to connect to database.');
           throw error;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay * retries));
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.retryDelay * retries),
+        );
       }
     }
   }
@@ -56,7 +55,7 @@ export class PrismaService extends PrismaClient<Prisma.PrismaClientOptions, 'bef
     this.logger.log('Successfully disconnected from database');
   }
 
-  async healthCheck() {
+  async healthCheck(): Promise<boolean> {
     try {
       await this.$queryRaw`SELECT 1`;
       return true;

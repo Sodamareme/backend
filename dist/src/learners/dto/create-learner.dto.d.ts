@@ -13,7 +13,7 @@ export declare class CreateLearnerDto {
     phone: string;
     address: string;
     gender: string;
-    birthDate: Date;
+    birthDate: string;
     birthPlace: string;
     promotionId: string;
     refId?: string;

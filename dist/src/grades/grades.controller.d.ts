@@ -19,9 +19,9 @@ export declare class GradesController {
             id: string;
             name: string;
             refId: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -44,9 +44,9 @@ export declare class GradesController {
         module: {
             id: string;
             name: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -68,9 +68,9 @@ export declare class GradesController {
         module: {
             id: string;
             name: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
         };
     } & {
         id: string;
@@ -96,9 +96,9 @@ export declare class GradesController {
             name: string;
             photoUrl: string;
             refId: string;
-            description: string;
             startDate: Date;
             endDate: Date;
+            description: string;
             coachId: string;
         };
     } & {
