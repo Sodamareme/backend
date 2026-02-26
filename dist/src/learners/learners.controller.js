@@ -31,7 +31,12 @@ let LearnersController = class LearnersController {
         this.learnersService = learnersService;
     }
     async create(data, photoFile) {
-        console.log('=== BODY BRUT REÇU ===', JSON.stringify(data, null, 2));
+        console.log('=== PHOTO FILE REÇU ===', photoFile ? {
+            fieldname: photoFile.fieldname,
+            originalname: photoFile.originalname,
+            mimetype: photoFile.mimetype,
+            size: photoFile.size,
+        } : 'AUCUNE PHOTO');
         let tutor = {};
         if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
             tutor = data.tutor;

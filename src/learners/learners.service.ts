@@ -162,15 +162,18 @@ export class LearnersService {
 
           // 5. Upload photo (sans bloquer si erreur)
           let photoUrl: string | undefined;
-          if (photoFile) {
-            try {
-              const result = await this.cloudinary.uploadFile(photoFile, 'learners');
-              photoUrl = result.url;
-              this.logger.log(`Photo uploadée: ${photoUrl}`);
-            } catch (error) {
-              this.logger.warn(`Photo upload échouée, on continue sans: ${error.message}`);
-            }
-          }
+         if (photoFile) {
+  try {
+    this.logger.log(`=== UPLOAD PHOTO === size: ${photoFile.size}, type: ${photoFile.mimetype}`);
+    const result = await this.cloudinary.uploadFile(photoFile, 'learners');
+    photoUrl = result.url;
+    this.logger.log(`=== PHOTO URL === ${photoUrl}`);
+  } catch (error) {
+    this.logger.error(`=== PHOTO UPLOAD ÉCHOUÉE ===`);
+    this.logger.error(`Message: ${error.message}`);
+    this.logger.error(`Stack: ${error.stack}`);
+  }
+}
 
           // 6. Vérifier doublons
           const existingLearner = await prisma.learner.findFirst({

@@ -117,12 +117,15 @@ let LearnersService = LearnersService_1 = class LearnersService {
                 let photoUrl;
                 if (photoFile) {
                     try {
+                        this.logger.log(`=== UPLOAD PHOTO === size: ${photoFile.size}, type: ${photoFile.mimetype}`);
                         const result = await this.cloudinary.uploadFile(photoFile, 'learners');
                         photoUrl = result.url;
-                        this.logger.log(`Photo uploadée: ${photoUrl}`);
+                        this.logger.log(`=== PHOTO URL === ${photoUrl}`);
                     }
                     catch (error) {
-                        this.logger.warn(`Photo upload échouée, on continue sans: ${error.message}`);
+                        this.logger.error(`=== PHOTO UPLOAD ÉCHOUÉE ===`);
+                        this.logger.error(`Message: ${error.message}`);
+                        this.logger.error(`Stack: ${error.stack}`);
                     }
                 }
                 const existingLearner = await prisma.learner.findFirst({

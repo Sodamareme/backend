@@ -55,8 +55,12 @@ async create(
   @Body() data: any,
   @UploadedFile() photoFile?: Express.Multer.File,
 ) {
-  console.log('=== BODY BRUT REÇU ===', JSON.stringify(data, null, 2));
-
+   console.log('=== PHOTO FILE REÇU ===', photoFile ? {
+    fieldname: photoFile.fieldname,
+    originalname: photoFile.originalname,
+    mimetype: photoFile.mimetype,
+    size: photoFile.size,
+  } : 'AUCUNE PHOTO');
   // Reconstruire l'objet tutor depuis toutes les notations possibles
   // (multipart envoie: "tutor[firstName]", "tutor.firstName", ou objet imbriqué)
   let tutor: any = {};
