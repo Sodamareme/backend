@@ -12,8 +12,8 @@ export declare class GradesService {
             lastName: string;
             photoUrl: string;
             matricule: string;
-            refId: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string;
         };
         module: {
             id: string;
@@ -28,8 +28,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     }>;
     findAll(): Promise<({
@@ -53,8 +53,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     })[]>;
     findOne(id: string): Promise<{
@@ -75,8 +75,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     }>;
     update(id: string, updateGradeDto: UpdateGradeDto): Promise<{
@@ -97,8 +97,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     }>;
     remove(id: string): Promise<{
@@ -124,8 +124,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     })[]>;
     getGradesByModule(moduleId: string): Promise<({
@@ -135,8 +135,8 @@ export declare class GradesService {
             lastName: string;
             photoUrl: string;
             matricule: string;
-            refId: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string;
         };
         module: {
             id: string;
@@ -153,8 +153,8 @@ export declare class GradesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     })[]>;
 }

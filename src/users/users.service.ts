@@ -102,7 +102,7 @@ export class UsersService {
         return this.prisma.coach.findFirst({
           where: { userId: user.id },
           include: {
-            referential: true,
+            referentials: true,
            // promotions: true,  Replace 'learners' with a valid property like 'promotions'
             modules: true   // Include modules if needed
           }

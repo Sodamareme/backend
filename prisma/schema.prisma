@@ -41,12 +41,12 @@ model Coach {
   phone       String?
   photoUrl    String?
   userId      String            @unique
-  refId       String?
+  
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   matricule   String            @unique
   qrCode      String?
-  referential Referential?      @relation(fields: [refId], references: [id])
+  referentials Referential[] @relation("CoachReferentials")
   user        User              @relation(fields: [userId], references: [id])
   modules     Module[]
   attendances CoachAttendance[]
@@ -215,7 +215,7 @@ model Referential {
   updatedAt        DateTime    @updatedAt
   numberOfSessions Int         @default(1)
   sessionLength    Int?
-  coaches          Coach[]
+  coaches Coach[] @relation("CoachReferentials")
   learners         Learner[]
   modules          Module[]
   sessions         Session[]

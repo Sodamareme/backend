@@ -1,11 +1,8 @@
-import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-export declare class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export declare class PrismaService extends PrismaClient implements OnModuleInit {
     private readonly logger;
-    private readonly maxRetries;
-    private readonly retryDelay;
     constructor();
     onModuleInit(): Promise<void>;
-    onModuleDestroy(): Promise<void>;
-    healthCheck(): Promise<boolean>;
+    executeWithRetry<T>(fn: () => Promise<T>, retries?: number): Promise<T>;
 }

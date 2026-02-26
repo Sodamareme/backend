@@ -20,6 +20,17 @@ export declare class PromotionsService {
         upcomingEvents: number;
     }>;
     addReferentials(promotionId: string, referentialIds: string[]): Promise<{
+        referentials: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            photoUrl: string | null;
+            description: string | null;
+            capacity: number;
+            numberOfSessions: number;
+            sessionLength: number | null;
+        }[];
         learners: {
             id: string;
             createdAt: Date;
@@ -31,25 +42,14 @@ export declare class PromotionsService {
             photoUrl: string | null;
             matricule: string;
             qrCode: string;
-            refId: string | null;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string | null;
             promotionId: string;
             sessionId: string | null;
-        }[];
-        referentials: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
-            photoUrl: string | null;
-            description: string | null;
-            capacity: number;
-            numberOfSessions: number;
-            sessionLength: number | null;
         }[];
     } & {
         id: string;

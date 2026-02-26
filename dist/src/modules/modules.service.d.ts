@@ -27,8 +27,8 @@ export declare class ModulesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     }>;
     updateGrade(gradeId: string, data: {
@@ -45,8 +45,8 @@ export declare class ModulesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        value: number;
         comment: string | null;
+        value: number;
         moduleId: string;
     }>;
     getActiveModules(): Promise<Module[]>;

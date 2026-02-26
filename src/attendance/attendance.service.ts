@@ -49,7 +49,7 @@ export class AttendanceService {
         where: { matricule },
         include: {
           user: true,
-          referential: true,
+          referentials: true,
           attendances: {
             where: { date: today },
             take: 1
@@ -129,7 +129,7 @@ export class AttendanceService {
           firstName: coach.firstName,
           lastName: coach.lastName,
           photoUrl: coach.photoUrl,
-          referential: coach.referential
+          referential: coach.referentials?.[0] || null
         }
       };
     }
@@ -161,7 +161,7 @@ export class AttendanceService {
       where: { matricule },
       include: {
         user: true,
-        referential: true,
+        referentials: true,
       },
     });
 
@@ -261,7 +261,7 @@ export class AttendanceService {
         firstName: coach.firstName,
         lastName: coach.lastName,
         photoUrl: coach.photoUrl,
-        referential: coach.referential
+        referential: coach.referentials?.[0] || null
       }
     };
   }
@@ -336,102 +336,120 @@ async updateAbsenceStatus(
 
   return updatedAttendance;
 }
+async forceApprove(attendanceId: string): Promise<LearnerAttendance> {
+  const attendance = await this.prisma.learnerAttendance.findUnique({
+    where: { id: attendanceId },
+    include: { learner: true },
+  });
+
+  if (!attendance) {
+    throw new NotFoundException('Attendance record not found');
+  }
+
+  // ✅ Pas de vérification de justification — l'admin force l'autorisation
+  const updated = await this.prisma.learnerAttendance.update({
+    where: { id: attendanceId },
+    data: {
+      status: AbsenceStatus.APPROVED,
+      justificationComment: 'Autorisé par l\'administrateur',
+    },
+    include: {
+      learner: {
+        include: { referential: true },
+      },
+    },
+  });
+
+  return updated;
+}
+
 
   // 🔧 CORRECTION: Retour correct avec ID du scan
-  async getLatestScans(limit: number = 10) {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+async getLatestScans(limit: number = 10) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    this.logger.log(`Fetching latest scans for today: ${today.toISOString()}`);
+  this.logger.log(`Fetching latest scans for today: ${today.toISOString()}`);
 
-    const [learnerScans, coachScans] = await Promise.all([
-      this.prisma.learnerAttendance.findMany({
-        where: {
-          date: today,
-          isPresent: true,
-          scanTime: { not: null }
-        },
-        select: {
-          id: true,
-          scanTime: true,
-          isLate: true,
-          learner: {
-            select: {
-              id: true,
-              matricule: true,
-              firstName: true,
-              lastName: true,
-              photoUrl: true,
-              referential: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              },
-              promotion: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
+  const [learnerScans, coachScans] = await Promise.all([
+    this.prisma.learnerAttendance.findMany({
+      where: {
+        date: today,
+        isPresent: true,
+        scanTime: { not: null }
+      },
+      select: {
+        id: true,
+        scanTime: true,
+        isLate: true,
+        learner: {
+          select: {
+            id: true,
+            matricule: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+            referential: {
+              select: { id: true, name: true }
+            },
+            promotion: {
+              select: { id: true, name: true }
             }
           }
-        },
-        orderBy: { scanTime: 'desc' },
-        take: limit,
-      }),
-      this.prisma.coachAttendance.findMany({
-        where: {
-          date: today,
-          isPresent: true,
-          checkIn: { not: null }
-        },
-        select: {
-          id: true,
-          checkIn: true,
-          isLate: true,
-          coach: {
-            select: {
-              id: true,
-              matricule: true,
-              firstName: true,
-              lastName: true,
-              photoUrl: true,
-              referential: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
+        }
+      },
+      orderBy: { scanTime: 'desc' },
+      take: limit,
+    }),
+    this.prisma.coachAttendance.findMany({
+      where: {
+        date: today,
+        isPresent: true,
+        checkIn: { not: null }
+      },
+      include: {
+        coach: {
+          select: {
+            id: true,
+            matricule: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+            referentials: {
+              select: { id: true, name: true }
             }
           }
-        },
-        orderBy: { checkIn: 'desc' },
-        take: limit,
-      }),
-    ]);
+        }
+      },
+      orderBy: { checkIn: 'desc' },
+      take: limit,
+    }),
+  ]); // ✅ fermeture correcte de Promise.all
 
-    this.logger.log(`Found ${learnerScans.length} learner scans and ${coachScans.length} coach scans`);
+  this.logger.log(`Found ${learnerScans.length} learner scans and ${coachScans.length} coach scans`);
 
-    return {
-      learnerScans: learnerScans.map(scan => ({
-        id: scan.id,
-        type: 'LEARNER',
-        scanTime: scan.scanTime!.toISOString(),
-        isLate: scan.isLate,
-        attendanceStatus: scan.isLate ? 'LATE' : 'PRESENT',
-        learner: scan.learner
-      })),
-      coachScans: coachScans.map(scan => ({
-        id: scan.id,
-        type: 'COACH',
-        scanTime: scan.checkIn!.toISOString(),
-        isLate: scan.isLate,
-        attendanceStatus: scan.isLate ? 'LATE' : 'PRESENT',
-        coach: scan.coach
-      }))
-    };
-  }
+  return {
+    learnerScans: learnerScans.map(scan => ({
+      id: scan.id,
+      type: 'LEARNER',
+      scanTime: scan.scanTime!.toISOString(),
+      isLate: scan.isLate,
+      attendanceStatus: scan.isLate ? 'LATE' : 'PRESENT',
+      learner: scan.learner
+    })),
+    coachScans: coachScans.map(scan => ({
+      id: scan.id,
+      type: 'COACH',
+      scanTime: scan.checkIn!.toISOString(),
+      isLate: scan.isLate,
+      attendanceStatus: scan.isLate ? 'LATE' : 'PRESENT',
+      coach: {
+        ...scan.coach,
+        referential: scan.coach.referentials?.[0] || null // ✅ normaliser pour le frontend
+      }
+    }))
+  };
+}
 
 // Dans attendance.service.ts - Méthode corrigée
 
@@ -775,7 +793,7 @@ async getDailyStats(date: string, referentialId?: string) {
       include: {
         coach: {
           include: {
-            referential: true
+            referentials: true
           }
         }
       },
@@ -869,86 +887,54 @@ async getDailyStats(date: string, referentialId?: string) {
     }
   }
 
-  @Cron('0 0 15 * * 1-5')
-  async markAbsentees() {
-    try {
-      this.logger.log('Starting markAbsentees cron job...');
-      
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+@Cron('0 0 15 * * 1-5')
+async markAbsentees() {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-      await this.prisma.$transaction(async (prisma) => {
-        const learners = await prisma.learner.findMany({
-          where: {
-            status: 'ACTIVE'
-          },
-          select: {
-            id: true,
-            matricule: true
-          }
-        });
+    // 1. Récupérer tous les coaches actifs
+    const coaches = await this.prisma.coach.findMany({
+      select: { id: true }
+    });
 
-        this.logger.log(`Found ${learners.length} active learners to process`);
+    if (coaches.length === 0) return;
 
-        for (const learner of learners) {
-          const existingAttendance = await prisma.learnerAttendance.findFirst({
-            where: {
-              learnerId: learner.id,
-              date: today,
-            }
-          });
+    // 2. Récupérer les coaches qui ont déjà une présence aujourd'hui
+    const presentToday = await this.prisma.coachAttendance.findMany({
+      where: {
+        date: today,
+      },
+      select: { coachId: true }
+    });
 
-          if (!existingAttendance) {
-            this.logger.log(`Marking learner ${learner.matricule} as absent`);
-            await prisma.learnerAttendance.create({
-              data: {
-                date: today,
-                isPresent: false,
-                isLate: false,
-                learnerId: learner.id,
-                status: 'TO_JUSTIFY',
-              }
-            });
-          }
-        }
+    const presentIds = new Set(presentToday.map(a => a.coachId));
 
-        const coaches = await prisma.coach.findMany({
-          select: {
-            id: true,
-            matricule: true
-          }
-        });
+    // 3. Filtrer ceux qui n'ont pas encore de présence
+    const coachesToMark = coaches.filter(c => !presentIds.has(c.id));
 
-        this.logger.log(`Found ${coaches.length} coaches to process`);
-
-        for (const coach of coaches) {
-          const existingAttendance = await prisma.coachAttendance.findFirst({
-            where: {
-              coachId: coach.id,
-              date: today,
-            }
-          });
-
-          if (!existingAttendance) {
-            this.logger.log(`Marking coach ${coach.matricule} as absent`);
-            await prisma.coachAttendance.create({
-              data: {
-                date: today,
-                isPresent: false,
-                isLate: false,
-                coachId: coach.id,
-              }
-            });
-          }
-        }
+    // 4. Créer les absences en une seule opération
+    if (coachesToMark.length > 0) {
+      await this.prisma.coachAttendance.createMany({
+        data: coachesToMark.map(coach => ({
+          coachId: coach.id,
+          date: today,
+          isPresent: false,  // ✅ champ correct du schéma
+          isLate: false,
+          // pas de checkIn ni checkOut pour une absence
+        })),
+        skipDuplicates: true,
       });
 
-      this.logger.log('Completed markAbsentees cron job successfully');
-    } catch (error) {
-      this.logger.error('Error in markAbsentees cron job:', error);
-      throw error;
+      this.logger.log(`✅ Marked ${coachesToMark.length} coaches as absent for ${today.toISOString().split('T')[0]}`);
+    } else {
+      this.logger.log(`ℹ️ All coaches already have attendance records for today`);
     }
+
+  } catch (error) {
+    this.logger.error('Error in markAbsentees cron job:', error);
   }
+}
 
   async getAttendanceByLearner(learnerId: string) {
     return this.prisma.learnerAttendance.findMany({
@@ -975,4 +961,22 @@ async getDailyStats(date: string, referentialId?: string) {
       }
     });
   }
+  async updateAttendanceStatus(id: string, status: 'present' | 'late' | 'absent') {
+  const isPresent = status !== 'absent';
+  const isLate = status === 'late';
+
+  return this.prisma.learnerAttendance.update({
+    where: { id },
+    data: {
+      isPresent,
+      isLate,
+      status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
+    },
+    include: {
+      learner: {
+        include: { referential: true }
+      }
+    }
+  });
+}
 }

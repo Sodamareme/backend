@@ -11,38 +11,33 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateCoachDto = void 0;
 const class_validator_1 = require("class-validator");
-const swagger_1 = require("@nestjs/swagger");
+const class_transformer_1 = require("class-transformer");
 class CreateCoachDto {
 }
 exports.CreateCoachDto = CreateCoachDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'First name of the coach' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateCoachDto.prototype, "firstName", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'Last name of the coach' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateCoachDto.prototype, "lastName", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'Email address of the coach' }),
     (0, class_validator_1.IsEmail)(),
     __metadata("design:type", String)
 ], CreateCoachDto.prototype, "email", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Phone number of the coach' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateCoachDto.prototype, "phone", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: 'ID of the referential to assign the coach to',
-        example: 'uuid-of-referential'
-    }),
-    (0, class_validator_1.IsUUID)(),
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    (0, class_transformer_1.Transform)(({ value }) => (!value || value === '' || value === 'null' || value === 'undefined')
+        ? undefined
+        : value),
     __metadata("design:type", String)
 ], CreateCoachDto.prototype, "refId", void 0);
 //# sourceMappingURL=create-coach.dto.js.map

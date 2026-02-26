@@ -4,19 +4,19 @@ export declare class UsersController {
     constructor(usersService: UsersService);
     findOne(id: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string;
         password: string;
         role: import(".prisma/client").$Enums.UserRole;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     update(id: string, data: any): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string;
         password: string;
         role: import(".prisma/client").$Enums.UserRole;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     getUserPhoto(email: string): Promise<{
         photoUrl: string | null;
@@ -24,19 +24,19 @@ export declare class UsersController {
     getUserByEmail(email: string): Promise<{
         details: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             firstName: string;
             lastName: string;
             phone: string | null;
-            userId: string;
             photoUrl: string | null;
+            userId: string;
+            createdAt: Date;
+            updatedAt: Date;
         };
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         email: string;
         password: string;
         role: import(".prisma/client").$Enums.UserRole;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module,Injectable, Logger  } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,7 +16,25 @@ import { MealsModule } from './meals/meals.module';
 import { VigilsModule } from './vigils/vigils.module';
 import { RestaurateursModule } from './restaurateurs/restaurateurs.module';
 import { GradesModule } from './grades/grades.module';
-import { EmailModule } from '../src/email/email.module';
+import { EmailModule } from '../src/email/email.module';import { PrismaService } from './prisma/prisma.service';
+import { Cron } from '@nestjs/schedule';
+@Injectable()
+export class DatabaseKeepalive {
+  private readonly logger = new Logger(DatabaseKeepalive.name);
+
+  constructor(private prisma: PrismaService) {}
+
+  @Cron('*/4 * * * *')
+  async keepAlive() {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+    } catch (e) {
+      this.logger.warn('Keepalive failed, reconnecting...');
+      await this.prisma.$disconnect();
+      await this.prisma.$connect();
+    }
+  }
+}
 
 @Module({
   imports: [
@@ -41,6 +59,11 @@ import { EmailModule } from '../src/email/email.module';
     GradesModule,
     EmailModule,
   
+  ],
+  providers: [
+    PrismaService,
+    DatabaseKeepalive, // ✅ Ajouter ici
+    // ... vos autres providers
   ],
   
 })

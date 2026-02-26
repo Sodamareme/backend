@@ -55,6 +55,12 @@ let AttendanceController = AttendanceController_1 = class AttendanceController {
     async updateAbsenceStatus(id, updateStatusDto) {
         return this.attendanceService.updateAbsenceStatus(id, updateStatusDto.status, updateStatusDto.comment);
     }
+    async forceApprove(id) {
+        return this.attendanceService.forceApprove(id);
+    }
+    async updateStatus(id, body) {
+        return this.attendanceService.updateAttendanceStatus(id, body.status);
+    }
     async getLatestScans() {
         return this.attendanceService.getLatestScans();
     }
@@ -140,6 +146,24 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], AttendanceController.prototype, "updateAbsenceStatus", null);
+__decorate([
+    (0, common_1.Put)('absence/:id/force-approve'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.COACH),
+    (0, swagger_1.ApiOperation)({ summary: 'Forcer l\'autorisation d\'une absence sans justificatif' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AttendanceController.prototype, "forceApprove", null);
+__decorate([
+    (0, common_1.Patch)(':id/status'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], AttendanceController.prototype, "updateStatus", null);
 __decorate([
     (0, common_1.Get)('scans/latest'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.VIGIL),

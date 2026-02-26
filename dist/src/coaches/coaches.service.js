@@ -25,27 +25,16 @@ let CoachesService = CoachesService_1 = class CoachesService {
         this.logger = new common_1.Logger(CoachesService_1.name);
     }
     async findAll() {
-        return this.prisma.coach.findMany({
+        const coaches = await this.prisma.coach.findMany({
+            orderBy: { createdAt: 'desc' },
             include: {
                 user: {
-                    select: {
-                        id: true,
-                        email: true,
-                        role: true,
-                    },
+                    select: { id: true, email: true, role: true }
                 },
-                referential: {
-                    select: {
-                        id: true,
-                        name: true,
-                        description: true,
-                    },
-                },
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
+                referentials: true,
+            }
         });
+        return coaches;
     }
     async findOne(id) {
         const coach = await this.prisma.coach.findUnique({
@@ -58,7 +47,7 @@ let CoachesService = CoachesService_1 = class CoachesService {
                         role: true,
                     },
                 },
-                referential: true,
+                referentials: true,
                 modules: true,
             },
         });
@@ -115,8 +104,8 @@ let CoachesService = CoachesService_1 = class CoachesService {
                         role: 'COACH',
                     },
                 });
-                console.log('✅ User created with ID:', user.id);
-                const newCoach = await prisma.coach.create({
+                this.logger.log('✅ User created with ID:', user.id);
+                return prisma.coach.create({
                     data: {
                         matricule,
                         firstName: createCoachDto.firstName,
@@ -125,31 +114,21 @@ let CoachesService = CoachesService_1 = class CoachesService {
                         photoUrl,
                         qrCode,
                         userId: user.id,
-                        refId: createCoachDto.refId || null,
+                        referentials: createCoachDto.refId ? {
+                            connect: [{ id: createCoachDto.refId }]
+                        } : undefined,
                     },
                     include: {
                         user: {
-                            select: {
-                                id: true,
-                                email: true,
-                                role: true,
-                            },
+                            select: { id: true, email: true, role: true },
                         },
-                        referential: {
-                            select: {
-                                id: true,
-                                name: true,
-                                description: true,
-                            },
+                        referentials: {
+                            select: { id: true, name: true, description: true },
                         },
                     },
                 });
-                console.log('✅ Coach created:', {
-                    id: newCoach.id,
-                    userId: newCoach.userId,
-                    name: `${newCoach.firstName} ${newCoach.lastName}`
-                });
-                return newCoach;
+            }, {
+                timeout: 15000,
             });
             try {
                 await this.emailService.sendCoachCredentials(createCoachDto.email, createCoachDto.firstName, createCoachDto.lastName, defaultPassword, matricule);
@@ -168,13 +147,9 @@ let CoachesService = CoachesService_1 = class CoachesService {
         }
     }
     async update(id, updateCoachDto, photoFile) {
+        this.logger.log('=== UPDATE DTO RAW ===');
+        this.logger.log(JSON.stringify(updateCoachDto));
         const coach = await this.findOne(id);
-        const cleanedData = {};
-        for (const [key, value] of Object.entries(updateCoachDto)) {
-            if (value !== '' && value !== 'null' && value !== 'undefined' && value !== null) {
-                cleanedData[key] = value;
-            }
-        }
         let photoUrl = coach.photoUrl;
         if (photoFile) {
             try {
@@ -185,28 +160,64 @@ let CoachesService = CoachesService_1 = class CoachesService {
                 this.logger.error('Failed to upload photo:', error);
             }
         }
-        return this.prisma.coach.update({
+        const updateData = { photoUrl };
+        if (updateCoachDto.firstName !== undefined)
+            updateData.firstName = updateCoachDto.firstName;
+        if (updateCoachDto.lastName !== undefined)
+            updateData.lastName = updateCoachDto.lastName;
+        if (updateCoachDto.phone !== undefined)
+            updateData.phone = updateCoachDto.phone;
+        const refIds = updateCoachDto.refIds;
+        const refId = updateCoachDto.refId;
+        if (refIds && refIds.length > 0) {
+            updateData.referentials = {
+                set: refIds.map((id) => ({ id }))
+            };
+        }
+        else if (refId && refId !== '') {
+            updateData.referentials = {
+                set: [{ id: refId }]
+            };
+        }
+        else {
+            updateData.referentials = { set: [] };
+        }
+        this.logger.log('📝 Update data:');
+        this.logger.log(JSON.stringify(updateData));
+        return this.prisma.executeWithRetry(() => this.prisma.coach.update({
             where: { id },
-            data: {
-                ...cleanedData,
-                photoUrl,
-            },
+            data: updateData,
             include: {
                 user: { select: { id: true, email: true, role: true } },
-                referential: true,
+                referentials: true,
             },
-        });
+        }));
     }
     async remove(id) {
         const coach = await this.findOne(id);
-        await this.prisma.$transaction(async (prisma) => {
-            await prisma.coach.delete({ where: { id } });
-            await prisma.user.delete({ where: { id: coach.userId } });
-        });
-        return {
-            success: true,
-            message: 'Coach supprimé avec succès'
-        };
+        try {
+            await this.prisma.$transaction(async (prisma) => {
+                await prisma.coachAttendance.deleteMany({
+                    where: { coachId: id }
+                });
+                await prisma.coach.delete({ where: { id } });
+                await prisma.user.delete({ where: { id: coach.userId } });
+            });
+            return {
+                success: true,
+                message: 'Coach supprimé avec succès'
+            };
+        }
+        catch (error) {
+            this.logger.error('❌ Erreur suppression coach:', error);
+            if (error.code === 'P2003') {
+                throw new common_1.BadRequestException(`Impossible de supprimer: données liées existantes. Détail: ${error.meta?.field_name}`);
+            }
+            if (error.code === 'P2025') {
+                throw new common_1.NotFoundException('Coach non trouvé');
+            }
+            throw new common_1.BadRequestException(error.message || 'Erreur lors de la suppression du coach');
+        }
     }
     async scanAttendance(qrData) {
         try {
@@ -220,7 +231,7 @@ let CoachesService = CoachesService_1 = class CoachesService {
                 where: { matricule: data.matricule },
                 include: {
                     user: true,
-                    referential: true,
+                    referentials: true,
                 },
             });
             console.log('👤 Coach found:', coach ? `${coach.firstName} ${coach.lastName}` : 'NOT FOUND');
@@ -293,7 +304,7 @@ let CoachesService = CoachesService_1 = class CoachesService {
                             lastName: true,
                             matricule: true,
                             photoUrl: true,
-                            referential: {
+                            referentials: {
                                 select: {
                                     id: true,
                                     name: true,
@@ -315,7 +326,7 @@ let CoachesService = CoachesService_1 = class CoachesService {
                     firstName: attendance.coach.firstName,
                     lastName: attendance.coach.lastName,
                     photoUrl: attendance.coach.photoUrl,
-                    referential: attendance.coach.referential?.name || null,
+                    referentials: attendance.coach.referentials.map(r => r.name),
                 },
                 checkIn: attendance.checkIn ? {
                     time: attendance.checkIn,
@@ -375,12 +386,7 @@ let CoachesService = CoachesService_1 = class CoachesService {
                         role: true,
                     }
                 },
-                referential: {
-                    select: {
-                        id: true,
-                        name: true,
-                    }
-                },
+                referentials: true,
             }
         });
         if (!coach) {

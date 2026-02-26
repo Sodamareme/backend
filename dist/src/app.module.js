@@ -5,8 +5,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var DatabaseKeepalive_1;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AppModule = void 0;
+exports.AppModule = exports.DatabaseKeepalive = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const schedule_1 = require("@nestjs/schedule");
@@ -26,6 +30,35 @@ const vigils_module_1 = require("./vigils/vigils.module");
 const restaurateurs_module_1 = require("./restaurateurs/restaurateurs.module");
 const grades_module_1 = require("./grades/grades.module");
 const email_module_1 = require("../src/email/email.module");
+const prisma_service_1 = require("./prisma/prisma.service");
+const schedule_2 = require("@nestjs/schedule");
+let DatabaseKeepalive = DatabaseKeepalive_1 = class DatabaseKeepalive {
+    constructor(prisma) {
+        this.prisma = prisma;
+        this.logger = new common_1.Logger(DatabaseKeepalive_1.name);
+    }
+    async keepAlive() {
+        try {
+            await this.prisma.$queryRaw `SELECT 1`;
+        }
+        catch (e) {
+            this.logger.warn('Keepalive failed, reconnecting...');
+            await this.prisma.$disconnect();
+            await this.prisma.$connect();
+        }
+    }
+};
+exports.DatabaseKeepalive = DatabaseKeepalive;
+__decorate([
+    (0, schedule_2.Cron)('*/4 * * * *'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], DatabaseKeepalive.prototype, "keepAlive", null);
+exports.DatabaseKeepalive = DatabaseKeepalive = DatabaseKeepalive_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+], DatabaseKeepalive);
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -52,6 +85,10 @@ exports.AppModule = AppModule = __decorate([
             meals_module_1.MealsModule,
             grades_module_1.GradesModule,
             email_module_1.EmailModule,
+        ],
+        providers: [
+            prisma_service_1.PrismaService,
+            DatabaseKeepalive,
         ],
     })
 ], AppModule);

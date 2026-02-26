@@ -39,12 +39,12 @@ export declare class LearnersService {
     }): Promise<Learner>;
     uploadDocument(id: string, file: Express.Multer.File, type: string, name: string): Promise<{
         id: string;
-        name: string;
-        type: string;
-        url: string;
-        learnerId: string;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
+        type: string;
+        learnerId: string;
+        url: string;
     }>;
     getAttendanceStats(id: string): Promise<{
         totalDays: number;
@@ -59,19 +59,19 @@ export declare class LearnersService {
     getWaitingList(promotionId?: string): Promise<Learner[]>;
     getStatusHistory(learnerId: string): Promise<{
         id: string;
+        reason: string | null;
         learnerId: string;
         previousStatus: import(".prisma/client").$Enums.LearnerStatus | null;
         newStatus: import(".prisma/client").$Enums.LearnerStatus;
-        reason: string | null;
         date: Date;
     }[]>;
     getDocuments(learnerId: string): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         type: string;
         url: string;
-        createdAt: Date;
-        updatedAt: Date;
     }[]>;
     getAttendanceByLearner(learnerId: string): Promise<{
         id: string;
@@ -88,12 +88,12 @@ export declare class LearnersService {
                 name: string;
             };
         };
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date;
         justification: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         documentUrl: string;
         justificationComment: string;
     }[]>;

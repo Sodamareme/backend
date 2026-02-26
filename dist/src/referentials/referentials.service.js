@@ -103,7 +103,11 @@ let ReferentialsService = class ReferentialsService {
             totalLearners: 0,
             activeModules: 0,
             totalCoaches: await this.prisma.coach.count({
-                where: { refId: id },
+                where: {
+                    referentials: {
+                        some: { id }
+                    }
+                }
             }),
             capacity: referential.capacity,
             availableSpots: 0,

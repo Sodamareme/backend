@@ -23,12 +23,12 @@ export declare class MealsService {
         photoUrl: string | null;
         matricule: string;
         qrCode: string;
-        refId: string | null;
         address: string | null;
         gender: import(".prisma/client").$Enums.Gender;
         birthDate: Date;
         birthPlace: string;
         status: import(".prisma/client").$Enums.LearnerStatus;
+        refId: string | null;
         promotionId: string;
         sessionId: string | null;
     }>;
@@ -56,12 +56,12 @@ export declare class MealsService {
             photoUrl: string | null;
             matricule: string;
             qrCode: string;
-            refId: string | null;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string | null;
             promotionId: string;
             sessionId: string | null;
         };
@@ -69,12 +69,22 @@ export declare class MealsService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        learnerId: string;
         type: string;
+        learnerId: string;
         date: Date;
     })[]>;
     getLatestScans(): Promise<({
         learner: {
+            promotion: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                name: string;
+                photoUrl: string | null;
+                status: import(".prisma/client").$Enums.PromotionStatus;
+                startDate: Date;
+                endDate: Date;
+            };
             referential: {
                 id: string;
                 createdAt: Date;
@@ -85,16 +95,6 @@ export declare class MealsService {
                 capacity: number;
                 numberOfSessions: number;
                 sessionLength: number | null;
-            };
-            promotion: {
-                id: string;
-                createdAt: Date;
-                updatedAt: Date;
-                name: string;
-                photoUrl: string | null;
-                status: import(".prisma/client").$Enums.PromotionStatus;
-                startDate: Date;
-                endDate: Date;
             };
         } & {
             id: string;
@@ -107,12 +107,12 @@ export declare class MealsService {
             photoUrl: string | null;
             matricule: string;
             qrCode: string;
-            refId: string | null;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string | null;
             promotionId: string;
             sessionId: string | null;
         };
@@ -120,8 +120,8 @@ export declare class MealsService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        learnerId: string;
         type: string;
+        learnerId: string;
         date: Date;
     })[]>;
 }

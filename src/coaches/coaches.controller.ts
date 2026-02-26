@@ -292,6 +292,7 @@ export class CoachesController {
     )
     photo?: Express.Multer.File,
   ) {
+     console.log('=== UPDATE COACH DTO ===', JSON.stringify(updateCoachDto, null, 2));
     return await this.coachesService.update(id, updateCoachDto, photo);
   }
 

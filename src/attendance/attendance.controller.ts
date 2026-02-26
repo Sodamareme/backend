@@ -12,6 +12,7 @@ import {
   HttpStatus,
   InternalServerErrorException,
   Logger,
+  Patch
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -112,6 +113,20 @@ async updateAbsenceStatus(
     updateStatusDto.status,
     updateStatusDto.comment
   );
+}
+@Put('absence/:id/force-approve')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.COACH)
+@ApiOperation({ summary: 'Forcer l\'autorisation d\'une absence sans justificatif' })
+async forceApprove(@Param('id') id: string) {
+  return this.attendanceService.forceApprove(id);
+}
+@Patch(':id/status')
+async updateStatus(
+  @Param('id') id: string,
+  @Body() body: { status: 'present' | 'late' | 'absent' }
+) {
+  return this.attendanceService.updateAttendanceStatus(id, body.status);
 }
 
   @Get('scans/latest')

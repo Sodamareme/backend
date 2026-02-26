@@ -102,7 +102,7 @@ let UsersService = class UsersService {
                 return this.prisma.coach.findFirst({
                     where: { userId: user.id },
                     include: {
-                        referential: true,
+                        referentials: true,
                         modules: true
                     }
                 });

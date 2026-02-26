@@ -47,7 +47,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                 where: { matricule },
                 include: {
                     user: true,
-                    referential: true,
+                    referentials: true,
                     attendances: {
                         where: { date: today },
                         take: 1
@@ -111,7 +111,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                     firstName: coach.firstName,
                     lastName: coach.lastName,
                     photoUrl: coach.photoUrl,
-                    referential: coach.referential
+                    referential: coach.referentials?.[0] || null
                 }
             };
         }
@@ -136,7 +136,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             where: { matricule },
             include: {
                 user: true,
-                referential: true,
+                referentials: true,
             },
         });
         if (!coach) {
@@ -218,7 +218,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                 firstName: coach.firstName,
                 lastName: coach.lastName,
                 photoUrl: coach.photoUrl,
-                referential: coach.referential
+                referential: coach.referentials?.[0] || null
             }
         };
     }
@@ -267,6 +267,28 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         });
         return updatedAttendance;
     }
+    async forceApprove(attendanceId) {
+        const attendance = await this.prisma.learnerAttendance.findUnique({
+            where: { id: attendanceId },
+            include: { learner: true },
+        });
+        if (!attendance) {
+            throw new common_1.NotFoundException('Attendance record not found');
+        }
+        const updated = await this.prisma.learnerAttendance.update({
+            where: { id: attendanceId },
+            data: {
+                status: client_1.AbsenceStatus.APPROVED,
+                justificationComment: 'Autorisé par l\'administrateur',
+            },
+            include: {
+                learner: {
+                    include: { referential: true },
+                },
+            },
+        });
+        return updated;
+    }
     async getLatestScans(limit = 10) {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -290,16 +312,10 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                             lastName: true,
                             photoUrl: true,
                             referential: {
-                                select: {
-                                    id: true,
-                                    name: true
-                                }
+                                select: { id: true, name: true }
                             },
                             promotion: {
-                                select: {
-                                    id: true,
-                                    name: true
-                                }
+                                select: { id: true, name: true }
                             }
                         }
                     }
@@ -313,10 +329,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                     isPresent: true,
                     checkIn: { not: null }
                 },
-                select: {
-                    id: true,
-                    checkIn: true,
-                    isLate: true,
+                include: {
                     coach: {
                         select: {
                             id: true,
@@ -324,11 +337,8 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                             firstName: true,
                             lastName: true,
                             photoUrl: true,
-                            referential: {
-                                select: {
-                                    id: true,
-                                    name: true
-                                }
+                            referentials: {
+                                select: { id: true, name: true }
                             }
                         }
                     }
@@ -353,7 +363,10 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                 scanTime: scan.checkIn.toISOString(),
                 isLate: scan.isLate,
                 attendanceStatus: scan.isLate ? 'LATE' : 'PRESENT',
-                coach: scan.coach
+                coach: {
+                    ...scan.coach,
+                    referential: scan.coach.referentials?.[0] || null
+                }
             }))
         };
     }
@@ -641,7 +654,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             include: {
                 coach: {
                     include: {
-                        referential: true
+                        referentials: true
                     }
                 }
             },
@@ -720,72 +733,39 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
     }
     async markAbsentees() {
         try {
-            this.logger.log('Starting markAbsentees cron job...');
-            const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            await this.prisma.$transaction(async (prisma) => {
-                const learners = await prisma.learner.findMany({
-                    where: {
-                        status: 'ACTIVE'
-                    },
-                    select: {
-                        id: true,
-                        matricule: true
-                    }
-                });
-                this.logger.log(`Found ${learners.length} active learners to process`);
-                for (const learner of learners) {
-                    const existingAttendance = await prisma.learnerAttendance.findFirst({
-                        where: {
-                            learnerId: learner.id,
-                            date: today,
-                        }
-                    });
-                    if (!existingAttendance) {
-                        this.logger.log(`Marking learner ${learner.matricule} as absent`);
-                        await prisma.learnerAttendance.create({
-                            data: {
-                                date: today,
-                                isPresent: false,
-                                isLate: false,
-                                learnerId: learner.id,
-                                status: 'TO_JUSTIFY',
-                            }
-                        });
-                    }
-                }
-                const coaches = await prisma.coach.findMany({
-                    select: {
-                        id: true,
-                        matricule: true
-                    }
-                });
-                this.logger.log(`Found ${coaches.length} coaches to process`);
-                for (const coach of coaches) {
-                    const existingAttendance = await prisma.coachAttendance.findFirst({
-                        where: {
-                            coachId: coach.id,
-                            date: today,
-                        }
-                    });
-                    if (!existingAttendance) {
-                        this.logger.log(`Marking coach ${coach.matricule} as absent`);
-                        await prisma.coachAttendance.create({
-                            data: {
-                                date: today,
-                                isPresent: false,
-                                isLate: false,
-                                coachId: coach.id,
-                            }
-                        });
-                    }
-                }
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const coaches = await this.prisma.coach.findMany({
+                select: { id: true }
             });
-            this.logger.log('Completed markAbsentees cron job successfully');
+            if (coaches.length === 0)
+                return;
+            const presentToday = await this.prisma.coachAttendance.findMany({
+                where: {
+                    date: today,
+                },
+                select: { coachId: true }
+            });
+            const presentIds = new Set(presentToday.map(a => a.coachId));
+            const coachesToMark = coaches.filter(c => !presentIds.has(c.id));
+            if (coachesToMark.length > 0) {
+                await this.prisma.coachAttendance.createMany({
+                    data: coachesToMark.map(coach => ({
+                        coachId: coach.id,
+                        date: today,
+                        isPresent: false,
+                        isLate: false,
+                    })),
+                    skipDuplicates: true,
+                });
+                this.logger.log(`✅ Marked ${coachesToMark.length} coaches as absent for ${today.toISOString().split('T')[0]}`);
+            }
+            else {
+                this.logger.log(`ℹ️ All coaches already have attendance records for today`);
+            }
         }
         catch (error) {
             this.logger.error('Error in markAbsentees cron job:', error);
-            throw error;
         }
     }
     async getAttendanceByLearner(learnerId) {
@@ -809,6 +789,23 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                             }
                         }
                     }
+                }
+            }
+        });
+    }
+    async updateAttendanceStatus(id, status) {
+        const isPresent = status !== 'absent';
+        const isLate = status === 'late';
+        return this.prisma.learnerAttendance.update({
+            where: { id },
+            data: {
+                isPresent,
+                isLate,
+                status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
+            },
+            include: {
+                learner: {
+                    include: { referential: true }
                 }
             }
         });

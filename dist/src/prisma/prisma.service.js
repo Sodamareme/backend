@@ -16,55 +16,53 @@ const client_1 = require("@prisma/client");
 let PrismaService = PrismaService_1 = class PrismaService extends client_1.PrismaClient {
     constructor() {
         super({
-            log: [
-                { emit: 'stdout', level: 'query' },
-                { emit: 'stdout', level: 'info' },
-                { emit: 'stdout', level: 'warn' },
-                { emit: 'stdout', level: 'error' },
-            ],
-            datasources: {
-                db: {
-                    url: process.env.DATABASE_URL,
-                },
-            },
+            log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
         });
         this.logger = new common_1.Logger(PrismaService_1.name);
-        this.maxRetries = 3;
-        this.retryDelay = 1000;
     }
     async onModuleInit() {
-        let retries = 0;
-        while (retries < this.maxRetries) {
+        let retries = 5;
+        while (retries > 0) {
             try {
                 await this.$connect();
-                this.logger.log('Successfully connected to database');
+                this.logger.log('✅ Database connected');
                 return;
             }
             catch (error) {
-                retries++;
-                this.logger.error(`Failed to connect to database (attempt ${retries}/${this.maxRetries}):`, error);
-                if (retries === this.maxRetries) {
-                    this.logger.error('Max retries reached. Unable to connect to database.');
-                    throw error;
+                retries--;
+                this.logger.warn(`⚠️ DB not ready, retrying in 3s... (${retries} attempts left)`);
+                if (retries === 0) {
+                    this.logger.error('❌ Could not connect at startup, will retry on first request');
+                    return;
                 }
-                await new Promise((resolve) => setTimeout(resolve, this.retryDelay * retries));
+                await new Promise(r => setTimeout(r, 3000));
             }
         }
     }
-    async onModuleDestroy() {
-        this.logger.log('Disconnecting from database...');
-        await this.$disconnect();
-        this.logger.log('Successfully disconnected from database');
-    }
-    async healthCheck() {
-        try {
-            await this.$queryRaw `SELECT 1`;
-            return true;
+    async executeWithRetry(fn, retries = 3) {
+        for (let i = 1; i <= retries; i++) {
+            try {
+                return await fn();
+            }
+            catch (error) {
+                const isNetworkError = error?.message?.includes("Can't reach database") ||
+                    error?.message?.includes('connect ECONNREFUSED') ||
+                    error?.code === 'P1001' ||
+                    error?.code === 'P1002';
+                if (isNetworkError && i < retries) {
+                    this.logger.warn(`⚠️ Neon unreachable, retry ${i}/${retries} in ${i * 2}s...`);
+                    await new Promise(r => setTimeout(r, i * 2000));
+                    try {
+                        await this.$disconnect();
+                        await this.$connect();
+                    }
+                    catch { }
+                    continue;
+                }
+                throw error;
+            }
         }
-        catch (error) {
-            this.logger.error('Database health check failed:', error);
-            return false;
-        }
+        throw new Error('DB unreachable after retries');
     }
 };
 exports.PrismaService = PrismaService;

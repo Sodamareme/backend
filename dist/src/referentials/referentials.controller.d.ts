@@ -8,10 +8,10 @@ export declare class ReferentialsController {
     constructor(referentialsService: ReferentialsService, cloudinaryService: CloudinaryService);
     create(formData: any, photoFile?: Express.Multer.File): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
         photoUrl: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         description: string | null;
         capacity: number;
         numberOfSessions: number;
@@ -23,10 +23,10 @@ export declare class ReferentialsController {
     }): Promise<{
         referentials: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             name: string;
             photoUrl: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
@@ -34,20 +34,20 @@ export declare class ReferentialsController {
         }[];
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
-        photoUrl: string | null;
-        status: import(".prisma/client").$Enums.PromotionStatus;
         startDate: Date;
         endDate: Date;
+        photoUrl: string | null;
+        status: import(".prisma/client").$Enums.PromotionStatus;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     findAll(): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
         photoUrl: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         description: string | null;
         capacity: number;
         numberOfSessions: number;
@@ -55,10 +55,10 @@ export declare class ReferentialsController {
     }[]>;
     findAllReferentials(): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
         photoUrl: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         description: string | null;
         capacity: number;
         numberOfSessions: number;
@@ -68,10 +68,10 @@ export declare class ReferentialsController {
     getStatistics(id: string): Promise<import("./interfaces/referential-stats.interface").ReferentialStats>;
     update(id: string, data: Partial<CreateReferentialDto>): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
         photoUrl: string | null;
+        createdAt: Date;
+        updatedAt: Date;
         description: string | null;
         capacity: number;
         numberOfSessions: number;

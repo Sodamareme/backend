@@ -15,12 +15,12 @@ export declare class MealScansService {
             photoUrl: string | null;
             matricule: string;
             qrCode: string;
-            refId: string | null;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
             status: import(".prisma/client").$Enums.LearnerStatus;
+            refId: string | null;
             promotionId: string;
             sessionId: string | null;
         };
@@ -36,8 +36,8 @@ export declare class MealScansService {
         };
     } & {
         id: string;
-        learnerId: string;
         type: import(".prisma/client").$Enums.MealType;
+        learnerId: string;
         scannedAt: Date;
         restaurateurId: string;
     }>;
@@ -56,8 +56,8 @@ export declare class MealScansService {
         };
     } & {
         id: string;
-        learnerId: string;
         type: import(".prisma/client").$Enums.MealType;
+        learnerId: string;
         scannedAt: Date;
         restaurateurId: string;
     })[]>;
@@ -65,16 +65,16 @@ export declare class MealScansService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        learnerId: string;
         type: string;
+        learnerId: string;
         date: Date;
     }[]>;
     findByMatricule(learnerMatricule: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        learnerId: string;
         type: string;
+        learnerId: string;
         date: Date;
     }>;
 }

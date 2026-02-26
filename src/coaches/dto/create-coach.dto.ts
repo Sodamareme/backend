@@ -1,30 +1,26 @@
-import { IsString, IsEmail, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsUUID, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
+import { Transform } from 'class-transformer';
 export class CreateCoachDto {
-  @ApiProperty({ description: 'First name of the coach' })
   @IsString()
   firstName: string;
 
-  @ApiProperty({ description: 'Last name of the coach' })
   @IsString()
   lastName: string;
 
-  @ApiProperty({ description: 'Email address of the coach' })
   @IsEmail()
   email: string;
 
-  @ApiPropertyOptional({ description: 'Phone number of the coach' })
   @IsString()
   @IsOptional()
   phone?: string;
 
-  @ApiPropertyOptional({ 
-    description: 'ID of the referential to assign the coach to',
-    example: 'uuid-of-referential'
-  })
-  @IsUUID()
   @IsOptional()
+  @IsUUID()
+  @Transform(({ value }) => 
+    (!value || value === '' || value === 'null' || value === 'undefined') 
+      ? undefined 
+      : value
+  )
   refId?: string;
-  
 }

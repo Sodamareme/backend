@@ -25,28 +25,17 @@ export class CoachesService {
   ) {}
 
   async findAll() {
-    return this.prisma.coach.findMany({
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            role: true,
-          },
-        },
-        referential: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        },
+  const coaches = await this.prisma.coach.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: { id: true, email: true, role: true }
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
+      referentials: true, // ✅ inclure la relation
+    }
+  });
+  return coaches;
+}
 
   async findOne(id: string) {
     const coach = await this.prisma.coach.findUnique({
@@ -59,7 +48,7 @@ export class CoachesService {
             role: true,
           },
         },
-        referential: true,
+        referentials: true,
         modules: true,
       },
     });
@@ -71,172 +60,208 @@ export class CoachesService {
     return coach;
   }
 
-  async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
-    this.logger.log('🔄 Creating coach:', createCoachDto);
+async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
+  this.logger.log('🔄 Creating coach:', createCoachDto);
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: createCoachDto.email.toLowerCase().trim() },
+  const existingUser = await this.prisma.user.findUnique({
+    where: { email: createCoachDto.email.toLowerCase().trim() },
+  });
+
+  if (existingUser) {
+    throw new ConflictException(`Un utilisateur avec l'email ${createCoachDto.email} existe déjà`);
+  }
+
+  if (createCoachDto.refId) {
+    const referentialExists = await this.prisma.referential.findUnique({
+      where: { id: createCoachDto.refId },
     });
-
-    if (existingUser) {
-      throw new ConflictException(`Un utilisateur avec l'email ${createCoachDto.email} existe déjà`);
-    }
-    
-    if (createCoachDto.refId) {
-      const referentialExists = await this.prisma.referential.findUnique({
-        where: { id: createCoachDto.refId },
-      });
-      
-      if (!referentialExists) {
-        throw new BadRequestException('Le référentiel spécifié n\'existe pas');
-      }
-    }
-
-    try {
-      const matricule = await this.generateMatricule();
-      const defaultPassword = this.generateRandomPassword();
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
-      let photoUrl: string | null = null;
-      if (photoFile) {
-        try {
-          this.logger.log('Uploading coach photo to Cloudinary...');
-          const result = await this.cloudinary.uploadFile(photoFile, 'coaches');
-          photoUrl = result.url;
-          this.logger.log('✅ Photo uploaded:', photoUrl);
-        } catch (error) {
-          this.logger.error('Failed to upload photo:', error);
-        }
-      }
-
-      const qrCodeData = JSON.stringify({
-        matricule,
-        firstName: createCoachDto.firstName,
-        lastName: createCoachDto.lastName,
-        email: createCoachDto.email,
-        type: 'COACH',
-      });
-      const qrCode = await QRCode.toDataURL(qrCodeData);
-
-      const coach = await this.prisma.$transaction(async (prisma) => {
-    const user = await prisma.user.create({
-      data: {
-        email: createCoachDto.email.toLowerCase().trim(),
-        password: hashedPassword,
-        role: 'COACH',
-      },
-    });
-    console.log('✅ User created with ID:', user.id); // 🔍 Vérifier cet ID
-
-
-        const newCoach = await prisma.coach.create({
-          data: {
-            matricule,
-            firstName: createCoachDto.firstName,
-            lastName: createCoachDto.lastName,
-            phone: createCoachDto.phone,
-            photoUrl,
-            qrCode,
-            userId: user.id,
-            refId: createCoachDto.refId || null,
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                role: true,
-              },
-            },
-            referential: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-              },
-            },
-          },
-        });
-
-    console.log('✅ Coach created:', {
-      id: newCoach.id,
-      userId: newCoach.userId,
-      name: `${newCoach.firstName} ${newCoach.lastName}`
-    });
-        return newCoach;
-      });
-
-      try {
-        await this.emailService.sendCoachCredentials(
-          createCoachDto.email,
-          createCoachDto.firstName,
-          createCoachDto.lastName,
-          defaultPassword,
-          matricule
-        );
-      } catch (emailError) {
-        this.logger.error('❌ Erreur envoi email:', emailError);
-      }
-
-      return coach;
-    } catch (error) {
-      this.logger.error('❌ Erreur création coach:', error);
-      
-      if (error.code === 'P2002') {
-        throw new ConflictException('Un coach avec ces informations existe déjà');
-      }
-      
-      throw new BadRequestException(error.message || 'Erreur lors de la création du coach');
+    if (!referentialExists) {
+      throw new BadRequestException('Le référentiel spécifié n\'existe pas');
     }
   }
 
-  async update(id: string, updateCoachDto: UpdateCoachDto, photoFile?: Express.Multer.File) {
-    const coach = await this.findOne(id);
+  try {
+    const matricule = await this.generateMatricule();
+    const defaultPassword = this.generateRandomPassword();
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    const cleanedData: any = {};
-    for (const [key, value] of Object.entries(updateCoachDto)) {
-      if (value !== '' && value !== 'null' && value !== 'undefined' && value !== null) {
-        cleanedData[key] = value;
-      }
-    }
-
-    let photoUrl = coach.photoUrl;
+    // ✅ Upload photo AVANT la transaction
+    let photoUrl: string | null = null;
     if (photoFile) {
       try {
+        this.logger.log('Uploading coach photo to Cloudinary...');
         const result = await this.cloudinary.uploadFile(photoFile, 'coaches');
         photoUrl = result.url;
+        this.logger.log('✅ Photo uploaded:', photoUrl);
       } catch (error) {
         this.logger.error('Failed to upload photo:', error);
       }
     }
 
-    return this.prisma.coach.update({
-      where: { id },
-      data: {
-        ...cleanedData,
-        photoUrl,
-      },
-      include: {
-        user: { select: { id: true, email: true, role: true } },
-        referential: true,
-      },
+    // ✅ Génération QR Code AVANT la transaction
+    const qrCodeData = JSON.stringify({
+      matricule,
+      firstName: createCoachDto.firstName,
+      lastName: createCoachDto.lastName,
+      email: createCoachDto.email,
+      type: 'COACH',
     });
+    const qrCode = await QRCode.toDataURL(qrCodeData);
+
+    // ✅ Transaction uniquement pour les opérations DB (rapides)
+    const coach = await this.prisma.$transaction(async (prisma) => {
+      const user = await prisma.user.create({
+        data: {
+          email: createCoachDto.email.toLowerCase().trim(),
+          password: hashedPassword,
+          role: 'COACH',
+        },
+      });
+      this.logger.log('✅ User created with ID:', user.id);
+
+      return prisma.coach.create({
+        data: {
+          matricule,
+          firstName: createCoachDto.firstName,
+          lastName: createCoachDto.lastName,
+          phone: createCoachDto.phone,
+          photoUrl,
+          qrCode,
+          userId: user.id,
+           referentials: createCoachDto.refId ? {
+            connect: [{ id: createCoachDto.refId }]
+          } : undefined,
+        },
+        include: {
+          user: {
+            select: { id: true, email: true, role: true },
+          },
+          referentials: {
+            select: { id: true, name: true, description: true },
+          },
+        },
+      });
+    }, {
+      timeout: 15000, // ✅ Augmente aussi le timeout par sécurité
+    });
+
+    // ✅ Email APRÈS la transaction
+    try {
+      await this.emailService.sendCoachCredentials(
+        createCoachDto.email,
+        createCoachDto.firstName,
+        createCoachDto.lastName,
+        defaultPassword,
+        matricule
+      );
+    } catch (emailError) {
+      this.logger.error('❌ Erreur envoi email:', emailError);
+    }
+
+    return coach;
+  } catch (error) {
+    this.logger.error('❌ Erreur création coach:', error);
+    if (error.code === 'P2002') {
+      throw new ConflictException('Un coach avec ces informations existe déjà');
+    }
+    throw new BadRequestException(error.message || 'Erreur lors de la création du coach');
+  }
+}
+
+async update(id: string, updateCoachDto: UpdateCoachDto, photoFile?: Express.Multer.File) {
+  this.logger.log('=== UPDATE DTO RAW ===');
+  this.logger.log(JSON.stringify(updateCoachDto));
+  
+  const coach = await this.findOne(id);
+
+  let photoUrl = coach.photoUrl;
+  if (photoFile) {
+    try {
+      const result = await this.cloudinary.uploadFile(photoFile, 'coaches');
+      photoUrl = result.url;
+    } catch (error) {
+      this.logger.error('Failed to upload photo:', error);
+    }
   }
 
-  async remove(id: string) {
-    const coach = await this.findOne(id);
+  const updateData: any = { photoUrl };
 
+  if (updateCoachDto.firstName !== undefined) updateData.firstName = updateCoachDto.firstName;
+  if (updateCoachDto.lastName !== undefined) updateData.lastName = updateCoachDto.lastName;
+  if (updateCoachDto.phone !== undefined) updateData.phone = updateCoachDto.phone;
+
+  // ✅ Support refIds[] (plusieurs) ET refId (un seul) pour compatibilité
+  const refIds = updateCoachDto.refIds;  // tableau
+  const refId = updateCoachDto.refId;    // singulier
+
+  if (refIds && refIds.length > 0) {
+    // ✅ Multi-référentiels
+    updateData.referentials = {
+      set: refIds.map((id: string) => ({ id }))
+    };
+  } else if (refId && refId !== '') {
+    // Compatibilité ancien format
+    updateData.referentials = {
+      set: [{ id: refId }]
+    };
+  } else {
+    // Vider les référentiels
+    updateData.referentials = { set: [] };
+  }
+
+  this.logger.log('📝 Update data:');
+  this.logger.log(JSON.stringify(updateData));
+
+  return this.prisma.executeWithRetry(() =>
+    this.prisma.coach.update({
+      where: { id },
+      data: updateData,
+      include: {
+        user: { select: { id: true, email: true, role: true } },
+        referentials: true,
+      },
+    })
+  );
+}
+async remove(id: string) {
+  const coach = await this.findOne(id);
+
+  try {
     await this.prisma.$transaction(async (prisma) => {
+      // ✅ Supprimer les présences liées
+      await prisma.coachAttendance.deleteMany({ 
+        where: { coachId: id } 
+      });
+
+      // ✅ Supprimer le coach
       await prisma.coach.delete({ where: { id } });
+
+      // ✅ Supprimer l'utilisateur associé
       await prisma.user.delete({ where: { id: coach.userId } });
     });
 
-    return { 
+    return {
       success: true,
-      message: 'Coach supprimé avec succès' 
+      message: 'Coach supprimé avec succès'
     };
-  }
+  } catch (error) {
+    this.logger.error('❌ Erreur suppression coach:', error);
 
+    if (error.code === 'P2003') {
+      throw new BadRequestException(
+        `Impossible de supprimer: données liées existantes. Détail: ${error.meta?.field_name}`
+      );
+    }
+
+    if (error.code === 'P2025') {
+      throw new NotFoundException('Coach non trouvé');
+    }
+
+    throw new BadRequestException(
+      error.message || 'Erreur lors de la suppression du coach'
+    );
+  }
+}
   // ============ SCAN ATTENDANCE ============
   async scanAttendance(qrData: string) {
   try {
@@ -252,7 +277,7 @@ export class CoachesService {
       where: { matricule: data.matricule },
       include: {
         user: true,
-        referential: true,
+        referentials: true,
       },
     });
 
@@ -339,7 +364,7 @@ export class CoachesService {
               lastName: true,
               matricule: true,
               photoUrl: true,
-              referential: {
+              referentials: {
                 select: {
                   id: true,
                   name: true,
@@ -362,7 +387,7 @@ export class CoachesService {
           firstName: attendance.coach.firstName,
           lastName: attendance.coach.lastName,
           photoUrl: attendance.coach.photoUrl,
-          referential: attendance.coach.referential?.name || null,
+          referentials: attendance.coach.referentials.map(r => r.name),
         },
         checkIn: attendance.checkIn ? {
           time: attendance.checkIn,
@@ -430,12 +455,7 @@ async findByUserId(userId: string) {
           role: true,
         }
       },
-      referential: {
-        select: {
-          id: true,
-          name: true,
-        }
-      },
+      referentials:true,
     }
   });
 

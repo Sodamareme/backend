@@ -135,6 +135,7 @@ let CoachesController = class CoachesController {
         return await this.coachesService.getCoachAttendanceHistory(coachId, start, end);
     }
     async update(id, updateCoachDto, photo) {
+        console.log('=== UPDATE COACH DTO ===', JSON.stringify(updateCoachDto, null, 2));
         return await this.coachesService.update(id, updateCoachDto, photo);
     }
     async remove(id) {

@@ -16,10 +16,10 @@ export declare class ReferentialsService {
     assignToPromotion(referentialIds: string[], promotionId: string): Promise<{
         referentials: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             name: string;
             photoUrl: string | null;
+            createdAt: Date;
+            updatedAt: Date;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
@@ -27,12 +27,12 @@ export declare class ReferentialsService {
         }[];
     } & {
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
         name: string;
-        photoUrl: string | null;
-        status: import(".prisma/client").$Enums.PromotionStatus;
         startDate: Date;
         endDate: Date;
+        photoUrl: string | null;
+        status: import(".prisma/client").$Enums.PromotionStatus;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
 }

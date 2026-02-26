@@ -12,12 +12,12 @@ export declare class PendingLearnersService {
         lastName: string;
         phone: string;
         photoUrl: string | null;
-        refId: string;
         address: string;
         gender: import(".prisma/client").$Enums.Gender;
         birthDate: Date;
         birthPlace: string;
         status: import(".prisma/client").$Enums.PendingStatus;
+        refId: string;
         promotionId: string;
         tutorData: import("@prisma/client/runtime/library").JsonValue;
         rejectionReason: string | null;
