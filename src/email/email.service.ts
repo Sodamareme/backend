@@ -32,7 +32,7 @@ export class EmailService {
    * Envoyer l'email de réinitialisation de mot de passe
    */
   async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://api.gestionecoleodc.com';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const mailOptions = {
@@ -243,7 +243,7 @@ ODC Inside - Orange Digital Center
       pendingLearnerId: string;
     }
   ): Promise<void> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://api.gestionecoleodc.com';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
     const validationLink = `${frontendUrl}/admin/pending-learners?id=${learnerData.pendingLearnerId}`;
 
     const mailOptions = {
@@ -450,7 +450,7 @@ ODC Inside - Orange Digital Center
       matricule: string;
     }
   ): Promise<void> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://api.gestionecoleodc.com';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
     const loginLink = `${frontendUrl}/login`;
 
     const mailOptions = {

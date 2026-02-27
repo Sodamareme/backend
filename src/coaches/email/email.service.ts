@@ -146,7 +146,7 @@ export class EmailService {
 
                     <!-- Bouton CTA -->
                     <div style="text-align: center; margin: 30px 0;">
-                      <a href="${this.configService.get('FRONTEND_URL', 'https://api.gestionecoleodc.com')}" 
+                      <a href="${this.configService.get('FRONTEND_URL', 'https://gestionecoleodc.com')}" 
                          style="display: inline-block; background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%); 
                                 color: #ffffff; text-decoration: none; padding: 15px 40px; 
                                 border-radius: 25px; font-size: 16px; font-weight: bold;

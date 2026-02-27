@@ -37,7 +37,7 @@ let EmailService = EmailService_1 = class EmailService {
         });
     }
     async sendPasswordResetEmail(email, resetToken) {
-        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
+        const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
         const mailOptions = {
             from: {
@@ -233,7 +233,7 @@ ODC Inside - Orange Digital Center
         }
     }
     async sendPendingLearnerNotification(adminEmail, learnerData) {
-        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
+        const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
         const validationLink = `${frontendUrl}/admin/pending-learners?id=${learnerData.pendingLearnerId}`;
         const mailOptions = {
             from: {
@@ -427,7 +427,7 @@ ODC Inside - Orange Digital Center
         }
     }
     async sendLearnerApprovalEmail(email, password, learnerData) {
-        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
+        const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
         const loginLink = `${frontendUrl}/login`;
         const mailOptions = {
             from: {
