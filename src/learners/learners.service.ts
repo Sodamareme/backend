@@ -1219,4 +1219,16 @@ export class LearnersService {
       },
     });
   }
+async updatePhoto(id: string, photoFile: Express.Multer.File): Promise<{ photoUrl: string }> {
+  await this.findOne(id);
+
+  const result = await this.cloudinary.uploadFile(photoFile, 'learners');
+
+  await this.prisma.learner.update({
+    where: { id },
+    data: { photoUrl: result.url },
+  });
+
+  return { photoUrl: result.url };
+}
 }

@@ -1009,6 +1009,15 @@ let LearnersService = LearnersService_1 = class LearnersService {
             },
         });
     }
+    async updatePhoto(id, photoFile) {
+        await this.findOne(id);
+        const result = await this.cloudinary.uploadFile(photoFile, 'learners');
+        await this.prisma.learner.update({
+            where: { id },
+            data: { photoUrl: result.url },
+        });
+        return { photoUrl: result.url };
+    }
 };
 exports.LearnersService = LearnersService;
 exports.LearnersService = LearnersService = LearnersService_1 = __decorate([
