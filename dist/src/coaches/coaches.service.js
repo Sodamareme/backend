@@ -403,38 +403,43 @@ let CoachesService = CoachesService_1 = class CoachesService {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
         const attendances = await this.prisma.coachAttendance.findMany({
-            where: {
-                coachId,
-                date: {
-                    gte: start,
-                    lte: end
-                }
-            },
-            orderBy: {
-                date: 'desc'
-            },
-            select: {
-                id: true,
-                date: true,
-                checkIn: true,
-                checkOut: true,
-                isPresent: true,
-                isLate: true,
-            }
+            where: { coachId, date: { gte: start, lte: end } },
+            orderBy: { date: 'desc' },
+            select: { id: true, date: true, checkIn: true, checkOut: true, isPresent: true, isLate: true }
         });
-        return attendances.map(attendance => ({
-            id: attendance.id,
-            date: attendance.date.toISOString(),
-            checkIn: attendance.checkIn ? {
-                time: attendance.checkIn.toISOString(),
-                isLate: attendance.isLate
-            } : null,
-            checkOut: attendance.checkOut ? {
-                time: attendance.checkOut.toISOString()
-            } : null,
-            isPresent: attendance.isPresent,
-            isLate: attendance.isLate,
-            duration: this.calculateDuration(attendance.checkIn, attendance.checkOut)
+        if (attendances.length > 0) {
+            this.logger.log('=== ATTENDANCE SAMPLE RAW ===');
+            this.logger.log(JSON.stringify({
+                checkIn: attendances[0].checkIn,
+                checkInType: typeof attendances[0].checkIn,
+                checkOut: attendances[0].checkOut,
+            }));
+        }
+        const toISO = (val) => {
+            if (!val)
+                return null;
+            try {
+                return new Date(val).toISOString();
+            }
+            catch {
+                return null;
+            }
+        };
+        const toDate = (val) => {
+            if (!val)
+                return null;
+            if (val instanceof Date)
+                return val;
+            return new Date(val);
+        };
+        return attendances.map(a => ({
+            id: a.id,
+            date: toISO(a.date),
+            checkIn: a.checkIn ? { time: toISO(a.checkIn), isLate: a.isLate } : null,
+            checkOut: a.checkOut ? { time: toISO(a.checkOut) } : null,
+            isPresent: a.isPresent,
+            isLate: a.isLate,
+            duration: this.calculateDuration(toDate(a.checkIn), toDate(a.checkOut)),
         }));
     }
     async getCoachAttendanceStats(coachId, year, month) {
@@ -489,11 +494,17 @@ let CoachesService = CoachesService_1 = class CoachesService {
     async getTodayAttendanceForCoach(coachId, today) {
         const todayStart = new Date(today);
         todayStart.setHours(0, 0, 0, 0);
+        const attendance = await this.prisma.coachAttendance.findFirst({
+            where: { coachId, date: todayStart },
+            select: {
+                id: true, date: true, checkIn: true,
+                checkOut: true, isPresent: true, isLate: true,
+            }
+        });
+        if (!attendance)
+            return null;
         return this.prisma.coachAttendance.findFirst({
-            where: {
-                coachId,
-                date: todayStart
-            },
+            where: { coachId, date: todayStart },
             select: {
                 id: true,
                 date: true,

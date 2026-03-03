@@ -62,9 +62,9 @@ export declare class CoachesService {
             updatedAt: Date;
             name: string;
             description: string | null;
-            coachId: string;
             startDate: Date;
             endDate: Date;
+            coachId: string;
             refId: string;
             sessionId: string | null;
         }[];
@@ -181,12 +181,12 @@ export declare class CoachesService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        coachId: string;
         date: Date;
         checkIn: Date | null;
         checkOut: Date | null;
         isPresent: boolean;
         isLate: boolean;
-        coachId: string;
     })[]>;
     findByUserId(userId: string): Promise<{
         referentials: {

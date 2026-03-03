@@ -72,23 +72,30 @@ let CoachesController = class CoachesController {
     }
     async getMyTodayAttendance(req) {
         const userId = this.getUserId(req);
-        console.log('📅 GET /coaches/me/attendance/today - userId:', userId);
         const coach = await this.coachesService.findByUserId(userId);
-        if (!coach) {
+        if (!coach)
             throw new common_1.NotFoundException('Coach non trouvé');
-        }
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const attendance = await this.coachesService.getTodayAttendanceForCoach(coach.id, today);
-        if (!attendance) {
-            console.log('ℹ️ No attendance found for today');
+        if (!attendance)
             return null;
-        }
         return {
             id: attendance.id,
-            date: attendance.date.toISOString(),
-            checkIn: attendance.checkIn?.toISOString() || null,
-            checkOut: attendance.checkOut?.toISOString() || null,
+            date: attendance.date instanceof Date
+                ? attendance.date.toISOString()
+                : attendance.date,
+            checkIn: attendance.checkIn ? {
+                time: attendance.checkIn instanceof Date
+                    ? attendance.checkIn.toISOString()
+                    : attendance.checkIn,
+                isLate: attendance.isLate,
+            } : null,
+            checkOut: attendance.checkOut ? {
+                time: attendance.checkOut instanceof Date
+                    ? attendance.checkOut.toISOString()
+                    : attendance.checkOut,
+            } : null,
             isPresent: attendance.isPresent,
             isLate: attendance.isLate,
         };

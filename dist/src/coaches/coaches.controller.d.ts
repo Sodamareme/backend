@@ -70,8 +70,13 @@ export declare class CoachesController {
     getMyTodayAttendance(req: any): Promise<{
         id: string;
         date: string;
-        checkIn: string;
-        checkOut: string;
+        checkIn: {
+            time: string;
+            isLate: boolean;
+        };
+        checkOut: {
+            time: string;
+        };
         isPresent: boolean;
         isLate: boolean;
     }>;
@@ -198,9 +203,9 @@ export declare class CoachesController {
             updatedAt: Date;
             name: string;
             description: string | null;
-            coachId: string;
             startDate: Date;
             endDate: Date;
+            coachId: string;
             refId: string;
             sessionId: string | null;
         }[];

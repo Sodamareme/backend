@@ -131,37 +131,44 @@ export class CoachesController {
    * Obtenir la présence d'aujourd'hui pour le coach connecté
    * GET /coaches/me/attendance/today
    */
-  @Get('me/attendance/today')
-  @Roles('COACH')
-  async getMyTodayAttendance(@Req() req) {
-    const userId = this.getUserId(req);
-    console.log('📅 GET /coaches/me/attendance/today - userId:', userId);
-    
-    const coach = await this.coachesService.findByUserId(userId);
-    
-    if (!coach) {
-      throw new NotFoundException('Coach non trouvé');
-    }
+  // coaches.controller.ts — getMyTodayAttendance
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+@Get('me/attendance/today')
+@Roles('COACH')
+async getMyTodayAttendance(@Req() req) {
+  const userId = this.getUserId(req);
+  const coach = await this.coachesService.findByUserId(userId);
+  
+  if (!coach) throw new NotFoundException('Coach non trouvé');
 
-    const attendance = await this.coachesService.getTodayAttendanceForCoach(coach.id, today);
-    
-    if (!attendance) {
-      console.log('ℹ️ No attendance found for today');
-      return null;
-    }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    return {
-      id: attendance.id,
-      date: attendance.date.toISOString(),
-      checkIn: attendance.checkIn?.toISOString() || null,
-      checkOut: attendance.checkOut?.toISOString() || null,
-      isPresent: attendance.isPresent,
+  const attendance = await this.coachesService.getTodayAttendanceForCoach(coach.id, today);
+  
+  if (!attendance) return null;
+
+  // ✅ attendance est déjà un objet Prisma brut ici — toISOString() est valide
+  return {
+    id: attendance.id,
+    date: attendance.date instanceof Date 
+      ? attendance.date.toISOString() 
+      : attendance.date,
+    checkIn: attendance.checkIn ? {
+      time: attendance.checkIn instanceof Date 
+        ? attendance.checkIn.toISOString() 
+        : attendance.checkIn,
       isLate: attendance.isLate,
-    };
-  }
+    } : null,
+    checkOut: attendance.checkOut ? {
+      time: attendance.checkOut instanceof Date 
+        ? attendance.checkOut.toISOString() 
+        : attendance.checkOut,
+    } : null,
+    isPresent: attendance.isPresent,
+    isLate: attendance.isLate,
+  };
+}
 
   /**
    * Auto-pointage pour le coach connecté

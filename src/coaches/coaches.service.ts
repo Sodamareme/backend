@@ -470,55 +470,61 @@ async findByUserId(userId: string) {
   /**
    * Obtenir l'historique de présence d'un coach
    */
-  async getCoachAttendanceHistory(
-    coachId: string,
-    startDate: Date,
-    endDate: Date
-  ) {
-    this.logger.log(`Fetching attendance history for coach ${coachId} from ${startDate} to ${endDate}`);
+// coaches.service.ts — remplace COMPLÈTEMENT getCoachAttendanceHistory
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+async getCoachAttendanceHistory(coachId: string, startDate: Date, endDate: Date) {
+  this.logger.log(`Fetching attendance history for coach ${coachId} from ${startDate} to ${endDate}`);
 
-    const attendances = await this.prisma.coachAttendance.findMany({
-      where: {
-        coachId,
-        date: {
-          gte: start,
-          lte: end
-        }
-      },
-      orderBy: {
-        date: 'desc'
-      },
-      select: {
-        id: true,
-        date: true,
-        checkIn: true,
-        checkOut: true,
-        isPresent: true,
-        isLate: true,
-      }
-    });
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
 
-    return attendances.map(attendance => ({
-      id: attendance.id,
-      date: attendance.date.toISOString(),
-      checkIn: attendance.checkIn ? {
-        time: attendance.checkIn.toISOString(),
-        isLate: attendance.isLate
-      } : null,
-      checkOut: attendance.checkOut ? {
-        time: attendance.checkOut.toISOString()
-      } : null,
-      isPresent: attendance.isPresent,
-      isLate: attendance.isLate,
-      duration: this.calculateDuration(attendance.checkIn, attendance.checkOut)
+  const attendances = await this.prisma.coachAttendance.findMany({
+    where: { coachId, date: { gte: start, lte: end } },
+    orderBy: { date: 'desc' },
+    select: { id: true, date: true, checkIn: true, checkOut: true, isPresent: true, isLate: true }
+  });
+
+  // ✅ Log pour débugger
+  if (attendances.length > 0) {
+    this.logger.log('=== ATTENDANCE SAMPLE RAW ===');
+    this.logger.log(JSON.stringify({
+      checkIn: attendances[0].checkIn,
+      checkInType: typeof attendances[0].checkIn,
+      checkOut: attendances[0].checkOut,
     }));
   }
+
+  // ✅ Helper universel — gère Date, string ISO, null
+ // coaches.service.ts — remplace toISO dans getCoachAttendanceHistory
+
+const toISO = (val: any): string | null => {
+  if (!val) return null;
+  // ✅ Fonctionne pour Date, string, et objets Date cross-realm
+  try {
+    return new Date(val).toISOString();
+  } catch {
+    return null;
+  }
+};
+
+  const toDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    return new Date(val);
+  };
+
+  return attendances.map(a => ({
+    id: a.id,
+    date: toISO(a.date),
+    checkIn: a.checkIn ? { time: toISO(a.checkIn), isLate: a.isLate } : null,
+    checkOut: a.checkOut ? { time: toISO(a.checkOut) } : null,
+    isPresent: a.isPresent,
+    isLate: a.isLate,
+    duration: this.calculateDuration(toDate(a.checkIn), toDate(a.checkOut)),
+  }));
+}
 
   /**
    * Obtenir les statistiques de présence d'un coach pour un mois
@@ -587,25 +593,32 @@ async findByUserId(userId: string) {
   /**
    * Obtenir la présence d'aujourd'hui pour un coach spécifique
    */
-  async getTodayAttendanceForCoach(coachId: string, today: Date) {
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
+async getTodayAttendanceForCoach(coachId: string, today: Date) {
+  const todayStart = new Date(today);
+  todayStart.setHours(0, 0, 0, 0);
+  const attendance = await this.prisma.coachAttendance.findFirst({
+    where: { coachId, date: todayStart },
+    select: {
+      id: true, date: true, checkIn: true,
+      checkOut: true, isPresent: true, isLate: true,
+    }
+  });
 
-    return this.prisma.coachAttendance.findFirst({
-      where: {
-        coachId,
-        date: todayStart
-      },
-      select: {
-        id: true,
-        date: true,
-        checkIn: true,
-        checkOut: true,
-        isPresent: true,
-        isLate: true,
-      }
-    });
-  }
+  if (!attendance) return null;
+
+  // ✅ Retourner le même format que getCoachAttendanceHistory
+   return this.prisma.coachAttendance.findFirst({
+    where: { coachId, date: todayStart },
+    select: {
+      id: true,
+      date: true,
+      checkIn: true,
+      checkOut: true,
+      isPresent: true,
+      isLate: true,
+    }
+  });
+}
 
   // ============ HELPER METHODS ============
   private async generateMatricule(): Promise<string> {
