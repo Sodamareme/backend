@@ -206,7 +206,7 @@ export declare class AttendanceService {
         late: number;
         absent: number;
         total: number;
-        attendance: {
+        attendance: ({
             id: string;
             date: string;
             scanTime: string;
@@ -228,7 +228,29 @@ export declare class AttendanceService {
                     name: string;
                 };
             };
-        }[];
+        } | {
+            id: string;
+            date: string;
+            scanTime: any;
+            isPresent: boolean;
+            isLate: boolean;
+            status: "TO_JUSTIFY";
+            justification: any;
+            documentUrl: any;
+            justificationComment: any;
+            learner: {
+                id: string;
+                firstName: string;
+                lastName: string;
+                matricule: string;
+                photoUrl: string;
+                address: string;
+                referential: {
+                    id: string;
+                    name: string;
+                };
+            };
+        })[];
     }>;
     getMonthlyStats(year: number, month: number): Promise<{
         days: any[];

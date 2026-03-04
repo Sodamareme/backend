@@ -451,43 +451,45 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         try {
             const targetDate = new Date(date);
             targetDate.setHours(0, 0, 0, 0);
-            const whereClause = {
-                date: targetDate,
-            };
-            if (referentialId) {
-                whereClause.learner = {
-                    refId: referentialId
-                };
-            }
+            const learnersWhere = { status: 'ACTIVE' };
+            if (referentialId)
+                learnersWhere.refId = referentialId;
+            const allLearners = await this.prisma.learner.findMany({
+                where: learnersWhere,
+                include: { referential: true }
+            });
+            const whereClause = { date: targetDate };
+            if (referentialId)
+                whereClause.learner = { refId: referentialId };
             const attendanceRecords = await this.prisma.learnerAttendance.findMany({
                 where: whereClause,
-                include: {
-                    learner: {
-                        include: {
-                            referential: true
-                        }
-                    }
-                }
+                include: { learner: { include: { referential: true } } }
             });
-            const present = attendanceRecords.filter(r => r.isPresent && !r.isLate).length;
-            const late = attendanceRecords.filter(r => r.isPresent && r.isLate).length;
-            const absent = attendanceRecords.filter(r => !r.isPresent).length;
-            let total = present + late + absent;
-            if (referentialId) {
-                const activeLearners = await this.prisma.learner.count({
-                    where: {
-                        refId: referentialId,
-                        status: 'ACTIVE'
-                    }
-                });
-                total = activeLearners;
-            }
-            return {
-                present,
-                late,
-                absent,
-                total,
-                attendance: attendanceRecords.map(record => ({
+            const attendanceMap = new Map(attendanceRecords.map(r => [r.learnerId, r]));
+            const absentRecords = allLearners
+                .filter(l => !attendanceMap.has(l.id))
+                .map(l => ({
+                id: `absent-${l.id}`,
+                date: targetDate.toISOString(),
+                scanTime: null,
+                isPresent: false,
+                isLate: false,
+                status: 'TO_JUSTIFY',
+                justification: null,
+                documentUrl: null,
+                justificationComment: null,
+                learner: {
+                    id: l.id,
+                    firstName: l.firstName,
+                    lastName: l.lastName,
+                    matricule: l.matricule,
+                    photoUrl: l.photoUrl,
+                    address: l.address,
+                    referential: l.referential ? { id: l.referential.id, name: l.referential.name } : undefined
+                }
+            }));
+            const allRecords = [
+                ...attendanceRecords.map(record => ({
                     id: record.id,
                     date: record.date.toISOString(),
                     scanTime: record.scanTime?.toISOString() || null,
@@ -504,13 +506,18 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                         matricule: record.learner.matricule,
                         photoUrl: record.learner.photoUrl,
                         address: record.learner.address,
-                        referential: record.learner.referential ? {
-                            id: record.learner.referential.id,
-                            name: record.learner.referential.name
-                        } : undefined
+                        referential: record.learner.referential
+                            ? { id: record.learner.referential.id, name: record.learner.referential.name }
+                            : undefined
                     }
-                }))
-            };
+                })),
+                ...absentRecords
+            ];
+            const present = allRecords.filter(r => r.isPresent && !r.isLate).length;
+            const late = allRecords.filter(r => r.isPresent && r.isLate).length;
+            const absent = allRecords.filter(r => !r.isPresent).length;
+            const total = allLearners.length;
+            return { present, late, absent, total, attendance: allRecords };
         }
         catch (error) {
             this.logger.error('Error getting daily stats:', error);

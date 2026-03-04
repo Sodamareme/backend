@@ -551,52 +551,55 @@ async getDailyStats(date: string, referentialId?: string) {
   try {
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
-    
-    const whereClause: any = {
-      date: targetDate,
-    };
 
-    // Si un référentiel est spécifié, filtrer par référentiel
-    if (referentialId) {
-      whereClause.learner = {
-        refId: referentialId
-      };
-    }
-    
-    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
-      where: whereClause,
-      include: {
-        learner: {
-          include: {
-            referential: true
-          }
-        }
-      }
+    // ✅ 1. Récupérer tous les apprenants actifs
+    const learnersWhere: any = { status: 'ACTIVE' };
+    if (referentialId) learnersWhere.refId = referentialId;
+
+    const allLearners = await this.prisma.learner.findMany({
+      where: learnersWhere,
+      include: { referential: true }
     });
 
-    const present = attendanceRecords.filter(r => r.isPresent && !r.isLate).length;
-    const late = attendanceRecords.filter(r => r.isPresent && r.isLate).length;
-    const absent = attendanceRecords.filter(r => !r.isPresent).length;
+    // ✅ 2. Récupérer les pointages du jour
+    const whereClause: any = { date: targetDate };
+    if (referentialId) whereClause.learner = { refId: referentialId };
 
-    // Si un référentiel est spécifié, calculer le total basé sur les apprenants actifs
-    let total = present + late + absent;
-    
-    if (referentialId) {
-      const activeLearners = await this.prisma.learner.count({
-        where: {
-          refId: referentialId,
-          status: 'ACTIVE'
+    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: whereClause,
+      include: { learner: { include: { referential: true } } }
+    });
+
+    // ✅ 3. Construire un map des pointages par learnerId
+    const attendanceMap = new Map(attendanceRecords.map(r => [r.learnerId, r]));
+
+    // ✅ 4. Générer les absences pour les apprenants sans pointage
+    const absentRecords = allLearners
+      .filter(l => !attendanceMap.has(l.id))
+      .map(l => ({
+        id: `absent-${l.id}`,
+        date: targetDate.toISOString(),
+        scanTime: null,
+        isPresent: false,
+        isLate: false,
+        status: 'TO_JUSTIFY' as const,
+        justification: null,
+        documentUrl: null,
+        justificationComment: null,
+        learner: {
+          id: l.id,
+          firstName: l.firstName,
+          lastName: l.lastName,
+          matricule: l.matricule,
+          photoUrl: l.photoUrl,
+          address: l.address,
+          referential: l.referential ? { id: l.referential.id, name: l.referential.name } : undefined
         }
-      });
-      total = activeLearners;
-    }
+      }));
 
-    return {
-      present,
-      late,
-      absent,
-      total,
-      attendance: attendanceRecords.map(record => ({
+    // ✅ 5. Combiner pointages réels + absences générées
+    const allRecords = [
+      ...attendanceRecords.map(record => ({
         id: record.id,
         date: record.date.toISOString(),
         scanTime: record.scanTime?.toISOString() || null,
@@ -613,13 +616,21 @@ async getDailyStats(date: string, referentialId?: string) {
           matricule: record.learner.matricule,
           photoUrl: record.learner.photoUrl,
           address: record.learner.address,
-          referential: record.learner.referential ? {
-            id: record.learner.referential.id,
-            name: record.learner.referential.name
-          } : undefined
+          referential: record.learner.referential
+            ? { id: record.learner.referential.id, name: record.learner.referential.name }
+            : undefined
         }
-      }))
-    };
+      })),
+      ...absentRecords
+    ];
+
+    const present = allRecords.filter(r => r.isPresent && !r.isLate).length;
+    const late    = allRecords.filter(r => r.isPresent && r.isLate).length;
+    const absent  = allRecords.filter(r => !r.isPresent).length;
+    const total   = allLearners.length;
+
+    return { present, late, absent, total, attendance: allRecords };
+
   } catch (error) {
     this.logger.error('Error getting daily stats:', error);
     throw error;
