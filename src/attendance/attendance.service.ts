@@ -32,31 +32,37 @@ export class AttendanceService {
     const isLate = !this.isWithinScanTime(now);
 
     // 1. Recherche en parallèle du learner et du coach
-    const [learner, coach] = await Promise.all([
-      this.prisma.learner.findUnique({
-        where: { matricule },
-        include: {
-          user: true,
-          referential: true,
-          promotion: true,
-          attendances: {
-            where: { date: today },
-            take: 1
-          }
-        },
-      }),
-      this.prisma.coach.findUnique({
-        where: { matricule },
-        include: {
-          user: true,
-          referentials: true,
-          attendances: {
-            where: { date: today },
-            take: 1
-          }
-        },
-      })
-    ]);
+  const [learner, coach] = await Promise.all([
+  this.prisma.learner.findUnique({
+    where: { matricule },
+    include: {
+      user: true,
+      referential: true,
+      promotion: true,
+      attendances: {
+        where: { date: today },
+        take: 1
+      }
+    },
+  }),
+  this.prisma.coach.findUnique({
+    where: { matricule },
+    include: {
+      user: true,
+      referentials: true,
+      attendances: {
+        where: { date: today },
+        take: 1,
+        select: {
+          id: true,
+          checkIn: true,
+          checkOut: true,  // ✅ était manquant
+          isLate: true,
+        }
+      }
+    },
+  })
+]);
 
     // 2. Traiter l'apprenant s'il existe
     if (learner) {
@@ -98,41 +104,65 @@ export class AttendanceService {
     }
 
     // 3. Traiter le coach s'il existe
-    if (coach) {
-      // Vérifier si déjà scanné
-      if (coach.attendances && coach.attendances.length > 0) {
-        const existingAttendance = coach.attendances[0];
-        throw new ConflictException(
-          `${coach.firstName} ${coach.lastName} a déjà été scanné aujourd'hui à ${existingAttendance.checkIn?.toLocaleTimeString() || 'heure inconnue'}`
-        );
+   if (coach) {
+  const existingAttendance = coach.attendances?.[0];
+
+  // ✅ CHECK-OUT : arrivée existante sans départ
+  if (existingAttendance?.checkIn && !existingAttendance?.checkOut) {
+    const updated = await this.prisma.coachAttendance.update({
+      where: { id: existingAttendance.id },
+      data: { checkOut: now }
+    });
+
+    return {
+      type: 'COACH',
+      scanTime: updated.checkOut!,
+      attendanceStatus: 'CHECKOUT',
+      isAlreadyScanned: false,
+      coach: {
+        id: coach.id,
+        matricule: coach.matricule,
+        firstName: coach.firstName,
+        lastName: coach.lastName,
+        photoUrl: coach.photoUrl,
+        referential: coach.referentials?.[0] || null
       }
+    };
+  }
 
-      // Créer l'attendance du coach
-      const attendance = await this.prisma.coachAttendance.create({
-        data: {
-          date: today,
-          isPresent: true,
-          checkIn: now,
-          isLate,
-          coachId: coach.id,
-        }
-      });
+  // ✅ Déjà check-in ET check-out
+  if (existingAttendance?.checkIn && existingAttendance?.checkOut) {
+    throw new ConflictException(
+      `${coach.firstName} ${coach.lastName} a déjà effectué son pointage de sortie aujourd'hui`
+    );
+  }
 
-      return {
-        type: 'COACH',
-        scanTime: attendance.checkIn || attendance.checkIn!,
-        attendanceStatus: isLate ? 'LATE' : 'PRESENT',
-        isAlreadyScanned: false,
-        coach: {
-          id: coach.id,
-          matricule: coach.matricule,
-          firstName: coach.firstName,
-          lastName: coach.lastName,
-          photoUrl: coach.photoUrl,
-          referential: coach.referentials?.[0] || null
-        }
-      };
+  // ✅ CHECK-IN : pas encore de pointage aujourd'hui
+  const attendance = await this.prisma.coachAttendance.create({
+    data: {
+      date: today,
+      isPresent: true,
+      checkIn: now,
+      isLate,
+      coachId: coach.id,
     }
+  });
+
+  return {
+    type: 'COACH',
+    scanTime: attendance.checkIn!,
+    attendanceStatus: isLate ? 'LATE' : 'PRESENT',
+    isAlreadyScanned: false,
+    coach: {
+      id: coach.id,
+      matricule: coach.matricule,
+      firstName: coach.firstName,
+      lastName: coach.lastName,
+      photoUrl: coach.photoUrl,
+      referential: coach.referentials?.[0] || null
+    }
+  };
+}
 
     // 4. Aucun utilisateur trouvé
     throw new NotFoundException('Aucun utilisateur trouvé avec ce matricule');

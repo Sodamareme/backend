@@ -160,11 +160,11 @@ async getMyTodayAttendance(@Req() req) {
         : attendance.checkIn,
       isLate: attendance.isLate,
     } : null,
-    checkOut: attendance.checkOut ? {
-      time: attendance.checkOut instanceof Date 
-        ? attendance.checkOut.toISOString() 
-        : attendance.checkOut,
-    } : null,
+    ccheckOut: attendance.checkOut ? {
+  time: attendance.checkOut instanceof Date
+    ? attendance.checkOut.toISOString()
+    : attendance.checkOut,
+} : null,
     isPresent: attendance.isPresent,
     isLate: attendance.isLate,
   };
@@ -223,10 +223,10 @@ async getMyTodayAttendance(@Req() req) {
   @Post('scan-attendance')
   @Roles('ADMIN','VIGIL')
   @HttpCode(HttpStatus.OK)
-  async scanAttendance(@Body('qrData') qrData: string) {
-    if (!qrData) {
-      throw new BadRequestException('QR Data manquant');
-    }
+  async scanAttendance(@Body() body: any) {
+    const qrData = body.qrData;
+    console.log('📥 Body reçu:', JSON.stringify(body)); 
+    
     return await this.coachesService.scanAttendance(qrData);
   }
 

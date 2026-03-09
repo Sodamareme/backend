@@ -1,7 +1,7 @@
 export interface BaseScanResponse {
     type: 'LEARNER' | 'COACH';
     scanTime: Date;
-    attendanceStatus: 'PRESENT' | 'LATE' | 'ABSENT';
+    attendanceStatus: 'PRESENT' | 'LATE' | 'ABSENT' | 'CHECKOUT';
     isAlreadyScanned: boolean;
 }
 export interface LearnerScanResponse extends BaseScanResponse {

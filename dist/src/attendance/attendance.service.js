@@ -50,7 +50,13 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                     referentials: true,
                     attendances: {
                         where: { date: today },
-                        take: 1
+                        take: 1,
+                        select: {
+                            id: true,
+                            checkIn: true,
+                            checkOut: true,
+                            isLate: true,
+                        }
                     }
                 },
             })
@@ -87,9 +93,29 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             };
         }
         if (coach) {
-            if (coach.attendances && coach.attendances.length > 0) {
-                const existingAttendance = coach.attendances[0];
-                throw new common_1.ConflictException(`${coach.firstName} ${coach.lastName} a déjà été scanné aujourd'hui à ${existingAttendance.checkIn?.toLocaleTimeString() || 'heure inconnue'}`);
+            const existingAttendance = coach.attendances?.[0];
+            if (existingAttendance?.checkIn && !existingAttendance?.checkOut) {
+                const updated = await this.prisma.coachAttendance.update({
+                    where: { id: existingAttendance.id },
+                    data: { checkOut: now }
+                });
+                return {
+                    type: 'COACH',
+                    scanTime: updated.checkOut,
+                    attendanceStatus: 'CHECKOUT',
+                    isAlreadyScanned: false,
+                    coach: {
+                        id: coach.id,
+                        matricule: coach.matricule,
+                        firstName: coach.firstName,
+                        lastName: coach.lastName,
+                        photoUrl: coach.photoUrl,
+                        referential: coach.referentials?.[0] || null
+                    }
+                };
+            }
+            if (existingAttendance?.checkIn && existingAttendance?.checkOut) {
+                throw new common_1.ConflictException(`${coach.firstName} ${coach.lastName} a déjà effectué son pointage de sortie aujourd'hui`);
             }
             const attendance = await this.prisma.coachAttendance.create({
                 data: {
@@ -102,7 +128,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             });
             return {
                 type: 'COACH',
-                scanTime: attendance.checkIn || attendance.checkIn,
+                scanTime: attendance.checkIn,
                 attendanceStatus: isLate ? 'LATE' : 'PRESENT',
                 isAlreadyScanned: false,
                 coach: {

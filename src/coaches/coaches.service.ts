@@ -263,89 +263,79 @@ async remove(id: string) {
   }
 }
   // ============ SCAN ATTENDANCE ============
-  async scanAttendance(qrData: string) {
+async scanAttendance(qrData: string) {
   try {
-    console.log('🔍 QR Data received:', qrData);
+    this.logger.log(`🔍 RAW qrData reçu: ${qrData}`); 
     const data = JSON.parse(qrData);
-    console.log('📋 Parsed data:', data);
-    
+      this.logger.log(`✅ Data parsé: ${JSON.stringify(data)}`); // ✅ ajouter
+    this.logger.log(`🔍 Type: ${data.type}, Matricule: ${data.matricule}`); // ✅ ajouter
+
     if (!data.matricule || data.type !== 'COACH') {
       throw new BadRequestException('QR Code invalide');
     }
 
     const coach = await this.prisma.coach.findUnique({
       where: { matricule: data.matricule },
-      include: {
-        user: true,
-        referentials: true,
-      },
+      include: { user: true, referentials: true },
     });
 
-    console.log('👤 Coach found:', coach ? `${coach.firstName} ${coach.lastName}` : 'NOT FOUND');
-
-    if (!coach) {
-      throw new NotFoundException('Coach non trouvé');
-    }
+    if (!coach) throw new NotFoundException('Coach non trouvé');
 
     const now = new Date();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+const today = new Date();
+today.setHours(0, 0, 0, 0);
 
-    console.log('📅 Today date:', today);
-    console.log('⏰ Current time:', now);
+const existingAttendance = await this.prisma.coachAttendance.findFirst({
+  where: { coachId: coach.id, date: today },
+});
 
-    const existingAttendance = await this.prisma.coachAttendance.findFirst({
-      where: {
-        coachId: coach.id,
-        date: today,
-      },
-    });
+// ✅ isLate calculé UNE SEULE FOIS avec l'heure actuelle (check-in uniquement)
+const workStartTime = new Date(today);
+workStartTime.setHours(8, 15, 0, 0);
+const isLate = now > workStartTime;
 
-    console.log('📊 Existing attendance:', existingAttendance ? 'YES' : 'NO');
+// CHECK-IN
+if (!existingAttendance) {
+  await this.prisma.coachAttendance.create({
+    data: {
+      coachId: coach.id,
+      date: today,
+      checkIn: now,
+      isPresent: true,
+      isLate, // ✅ basé sur l'heure d'arrivée
+    },
+  });
 
-    const workStartTime = new Date(today);
-    workStartTime.setHours(8, 15, 0, 0);
-    const isLate = now > workStartTime;
+  return {
+    action: 'checkin',
+    coach: { id: coach.id, firstName: coach.firstName, lastName: coach.lastName, matricule: coach.matricule, photoUrl: coach.photoUrl },
+    isLate,
+    message: `${coach.firstName} ${coach.lastName} a pointé son arrivée${isLate ? ' (en retard)' : ''}`,
+    time: now.toLocaleTimeString('fr-FR'),
+  };
+}
 
-    if (!existingAttendance) {
-      console.log('➕ Creating new attendance record...');
-      const newAttendance = await this.prisma.coachAttendance.create({
-        data: {
-          coachId: coach.id,
-          date: today,
-          checkIn: now,
-          isPresent: true,
-          isLate,
-        },
-      });
+// CHECK-OUT
+if (existingAttendance.checkIn && !existingAttendance.checkOut) {
+  await this.prisma.coachAttendance.update({
+    where: { id: existingAttendance.id },
+    data: { checkOut: now }, // ✅ JAMAIS isLate ici
+  });
 
-      console.log('✅ Attendance created:', newAttendance.id);
+  return {
+    action: 'checkout',
+    coach: { id: coach.id, firstName: coach.firstName, lastName: coach.lastName, matricule: coach.matricule, photoUrl: coach.photoUrl },
+    message: `${coach.firstName} ${coach.lastName} a pointé son départ`,
+    time: now.toLocaleTimeString('fr-FR'),
+  };
+}
 
-      return {
-        action: 'checkin',
-        coach: {
-          id: coach.id,
-          firstName: coach.firstName,
-          lastName: coach.lastName,
-          matricule: coach.matricule,
-          photoUrl: coach.photoUrl,
-        },
-        isLate,
-        message: `${coach.firstName} ${coach.lastName} a pointé${isLate ? ' (en retard)' : ''}`,
-        time: now.toLocaleTimeString('fr-FR'),
-      };
-    } else {
-        // DÉJÀ POINTÉ ENTRÉE ET SORTIE
-        throw new ConflictException(
-          `${coach.firstName} ${coach.lastName} a déjà effectué son pointage de sortie aujourd'hui`
-        );
-      }
-    } catch (error) {
-      this.logger.error('❌ Erreur scan attendance:', error);
-      throw error;
-    }
+throw new ConflictException(`${coach.firstName} ${coach.lastName} a déjà effectué son pointage de sortie aujourd'hui`);
+  } catch (error) {
+    this.logger.error('❌ Erreur scan attendance:', error);
+    throw error;
   }
-
+}
   // GET TODAY ATTENDANCE
   async getTodayAttendance() {
     try {
@@ -406,38 +396,63 @@ async remove(id: string) {
   }
 
   // GET ATTENDANCE HISTORY
-  async getAttendanceHistory(coachId: string, startDate?: Date, endDate?: Date) {
-    const where: any = { coachId };
-    
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        where.date.gte = start;
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        where.date.lte = end;
-      }
+ async getAttendanceHistory(coachId: string, startDate?: Date, endDate?: Date) {
+  const where: any = { coachId };
+  
+  if (startDate || endDate) {
+    where.date = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      where.date.gte = start;
     }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      where.date.lte = end;
+    }
+  }
 
-    return this.prisma.coachAttendance.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      include: {
-        coach: {
-          select: {
-            firstName: true,
-            lastName: true,
-            matricule: true,
-            photoUrl: true,
-          },
+  const attendances = await this.prisma.coachAttendance.findMany({
+    where,
+    orderBy: { date: 'desc' },
+    include: {
+      coach: {
+        select: {
+          firstName: true,
+          lastName: true,
+          matricule: true,
+          photoUrl: true,
         },
       },
-    });
-  }
+    },
+  });
+
+
+  const toISO = (val: any): string | null => {
+    if (!val) return null;
+    try { return new Date(val).toISOString(); } catch { return null; }
+  };
+
+  const toDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    return new Date(val);
+  };
+
+  return attendances.map(a => ({
+    id: a.id,
+    date: toISO(a.date),
+    checkIn:  a.checkIn  ? { time: toISO(a.checkIn),  isLate: a.isLate } : null,
+    checkOut: a.checkOut ? { time: toISO(a.checkOut) }                   : null,
+    isPresent: a.isPresent,
+    isLate: a.isLate,
+    duration: this.calculateDuration(toDate(a.checkIn), toDate(a.checkOut)),
+    coachId: a.coachId,
+    createdAt: toISO(a.createdAt),
+    updatedAt: toISO(a.updatedAt),
+  }));
+}
 
   /**
    * Trouver un coach par son userId
@@ -486,15 +501,6 @@ async getCoachAttendanceHistory(coachId: string, startDate: Date, endDate: Date)
     select: { id: true, date: true, checkIn: true, checkOut: true, isPresent: true, isLate: true }
   });
 
-  // ✅ Log pour débugger
-  if (attendances.length > 0) {
-    this.logger.log('=== ATTENDANCE SAMPLE RAW ===');
-    this.logger.log(JSON.stringify({
-      checkIn: attendances[0].checkIn,
-      checkInType: typeof attendances[0].checkIn,
-      checkOut: attendances[0].checkOut,
-    }));
-  }
 
   // ✅ Helper universel — gère Date, string ISO, null
  // coaches.service.ts — remplace toISO dans getCoachAttendanceHistory

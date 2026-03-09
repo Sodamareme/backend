@@ -91,7 +91,7 @@ let CoachesController = class CoachesController {
                     : attendance.checkIn,
                 isLate: attendance.isLate,
             } : null,
-            checkOut: attendance.checkOut ? {
+            ccheckOut: attendance.checkOut ? {
                 time: attendance.checkOut instanceof Date
                     ? attendance.checkOut.toISOString()
                     : attendance.checkOut,
@@ -122,10 +122,9 @@ let CoachesController = class CoachesController {
     async getTodayAttendance() {
         return await this.coachesService.getTodayAttendance();
     }
-    async scanAttendance(qrData) {
-        if (!qrData) {
-            throw new common_1.BadRequestException('QR Data manquant');
-        }
+    async scanAttendance(body) {
+        const qrData = body.qrData;
+        console.log('📥 Body reçu:', JSON.stringify(body));
         return await this.coachesService.scanAttendance(qrData);
     }
     async create(createCoachDto, photo) {
@@ -212,9 +211,9 @@ __decorate([
     (0, common_1.Post)('scan-attendance'),
     (0, roles_decorator_1.Roles)('ADMIN', 'VIGIL'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    __param(0, (0, common_1.Body)('qrData')),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], CoachesController.prototype, "scanAttendance", null);
 __decorate([

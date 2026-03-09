@@ -148,6 +148,18 @@ export declare class CoachesService {
         isLate: boolean;
         message: string;
         time: string;
+    } | {
+        action: string;
+        coach: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            matricule: string;
+            photoUrl: string;
+        };
+        message: string;
+        time: string;
+        isLate?: undefined;
     }>;
     getTodayAttendance(): Promise<{
         id: string;
@@ -170,24 +182,23 @@ export declare class CoachesService {
         isPresent: boolean;
         isLate: boolean;
     }[]>;
-    getAttendanceHistory(coachId: string, startDate?: Date, endDate?: Date): Promise<({
-        coach: {
-            firstName: string;
-            lastName: string;
-            photoUrl: string;
-            matricule: string;
-        };
-    } & {
+    getAttendanceHistory(coachId: string, startDate?: Date, endDate?: Date): Promise<{
         id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        coachId: string;
-        date: Date;
-        checkIn: Date | null;
-        checkOut: Date | null;
+        date: string;
+        checkIn: {
+            time: string;
+            isLate: boolean;
+        };
+        checkOut: {
+            time: string;
+        };
         isPresent: boolean;
         isLate: boolean;
-    })[]>;
+        duration: string;
+        coachId: string;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
     findByUserId(userId: string): Promise<{
         referentials: {
             id: string;
@@ -252,11 +263,11 @@ export declare class CoachesService {
     }>;
     getTodayAttendanceForCoach(coachId: string, today: Date): Promise<{
         id: string;
+        isLate: boolean;
         date: Date;
         checkIn: Date;
         checkOut: Date;
         isPresent: boolean;
-        isLate: boolean;
     }>;
     private generateMatricule;
     private generateRandomPassword;

@@ -74,7 +74,7 @@ export declare class CoachesController {
             time: string;
             isLate: boolean;
         };
-        checkOut: {
+        ccheckOut: {
             time: string;
         };
         isPresent: boolean;
@@ -92,6 +92,18 @@ export declare class CoachesController {
         isLate: boolean;
         message: string;
         time: string;
+    } | {
+        action: string;
+        coach: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            matricule: string;
+            photoUrl: string;
+        };
+        message: string;
+        time: string;
+        isLate?: undefined;
     }>;
     findAll(): Promise<({
         referentials: {
@@ -143,7 +155,7 @@ export declare class CoachesController {
         isPresent: boolean;
         isLate: boolean;
     }[]>;
-    scanAttendance(qrData: string): Promise<{
+    scanAttendance(body: any): Promise<{
         action: string;
         coach: {
             id: string;
@@ -155,6 +167,18 @@ export declare class CoachesController {
         isLate: boolean;
         message: string;
         time: string;
+    } | {
+        action: string;
+        coach: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            matricule: string;
+            photoUrl: string;
+        };
+        message: string;
+        time: string;
+        isLate?: undefined;
     }>;
     create(createCoachDto: CreateCoachDto, photo?: Express.Multer.File): Promise<{
         referentials: {
