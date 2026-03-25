@@ -22,7 +22,7 @@ export class MealsController {
   constructor(private readonly mealsService: MealsService) {}
 
   @Post('scan/:learnerId/:type')
-  @Roles(UserRole.RESTAURATEUR)
+  @Roles(UserRole.RESTAURATEUR,UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Scanner un repas pour un apprenant' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Repas scanné' })
   async scanMeal(
@@ -33,7 +33,7 @@ export class MealsController {
   }
 
   @Get('stats/daily')
-  @Roles(UserRole.ADMIN, UserRole.RESTAURATEUR)
+  @Roles(UserRole.ADMIN, UserRole.RESTAURATEUR,UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Obtenir les statistiques journalières des repas' })
   async getDailyStats() {
     return this.mealsService.getDailyStats();

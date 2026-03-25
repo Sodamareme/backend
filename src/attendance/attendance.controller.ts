@@ -39,7 +39,9 @@ export class AttendanceController {
     private readonly cloudinaryService: CloudinaryService
   ) {}
 
+  // ❌ SURVEILLANT n'a pas accès — réservé VIGIL uniquement
   @Post('scan')
+  @Roles(UserRole.VIGIL)
   @ApiOperation({ summary: 'Scan QR code for attendance' })
   @ApiResponse({ status: 200, description: 'Successfully scanned' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -50,25 +52,19 @@ export class AttendanceController {
     return this.attendanceService.scan(matricule);
   }
 
+  // ❌ SURVEILLANT n'a pas accès — réservé VIGIL uniquement
   @Post('scan/learner')
-  @Roles('VIGIL')
+  @Roles(UserRole.VIGIL)
   @ApiOperation({ summary: 'Scan a learner attendance' })
-  @ApiResponse({ status: 201, description: 'Attendance recorded successfully' })
-  @ApiResponse({ status: 404, description: 'Learner not found' })
-  async scanLearner(
-    @Body() body: { matricule: string }
-  ) {
+  async scanLearner(@Body() body: { matricule: string }) {
     return this.attendanceService.scanLearner(body.matricule);
   }
 
+  // ❌ SURVEILLANT n'a pas accès — réservé VIGIL uniquement
   @Post('scan/coach')
-  @Roles('VIGIL')
+  @Roles(UserRole.VIGIL)
   @ApiOperation({ summary: 'Scan a coach attendance' })
-  @ApiResponse({ status: 201, description: 'Attendance recorded successfully' })
-  @ApiResponse({ status: 404, description: 'Coach not found' })
-  async scanCoach(
-    @Body() body: { matricule: string }
-  ) {
+  async scanCoach(@Body() body: { matricule: string }) {
     return this.attendanceService.scanCoach(body.matricule);
   }
 
@@ -83,7 +79,6 @@ export class AttendanceController {
     @UploadedFile() document?: Express.Multer.File,
   ) {
     let documentUrl: string | undefined;
-    
     if (document) {
       try {
         const uploadResult = await this.cloudinaryService.uploadFile(document, 'justifications');
@@ -93,97 +88,95 @@ export class AttendanceController {
         throw new InternalServerErrorException('Failed to upload document');
       }
     }
+    return this.attendanceService.submitAbsenceJustification(id, justification, documentUrl);
+  }
 
-    return this.attendanceService.submitAbsenceJustification(
+  @Put('absence/:id/status')
+  @Roles(UserRole.ADMIN, UserRole.COACH)
+  async updateAbsenceStatus(
+    @Param('id') id: string,
+    @Body() updateStatusDto: { status: AbsenceStatus; comment?: string }
+  ) {
+    return this.attendanceService.updateAbsenceStatus(
       id,
-      justification,
-      documentUrl,
+      updateStatusDto.status,
+      updateStatusDto.comment
     );
   }
 
-@Put('absence/:id/status')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.COACH)
-async updateAbsenceStatus(
-  @Param('id') id: string,
-  @Body() updateStatusDto: { status: AbsenceStatus; comment?: string }
-) {
-  return this.attendanceService.updateAbsenceStatus(
-    id,
-    updateStatusDto.status,
-    updateStatusDto.comment
-  );
-}
-@Put('absence/:id/force-approve')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.COACH)
-@ApiOperation({ summary: 'Forcer l\'autorisation d\'une absence sans justificatif' })
-async forceApprove(@Param('id') id: string) {
-  return this.attendanceService.forceApprove(id);
-}
-@Patch(':id/status')
-async updateStatus(
-  @Param('id') id: string,
-  @Body() body: { status: 'present' | 'late' | 'absent' }
-) {
-  return this.attendanceService.updateAttendanceStatus(id, body.status);
-}
+  @Put('absence/:id/force-approve')
+  @Roles(UserRole.ADMIN, UserRole.COACH)
+  @ApiOperation({ summary: 'Forcer l\'autorisation d\'une absence sans justificatif' })
+  async forceApprove(@Param('id') id: string) {
+    return this.attendanceService.forceApprove(id);
+  }
 
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN, UserRole.COACH)
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'present' | 'late' | 'absent' }
+  ) {
+    return this.attendanceService.updateAttendanceStatus(id, body.status);
+  }
+
+  // ✅ SURVEILLANT a accès — lecture de l'historique des scans
   @Get('scans/latest')
-  @Roles(UserRole.VIGIL)
+  @Roles(UserRole.VIGIL, UserRole.ADMIN, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Récupérer les derniers scans' })
   async getLatestScans() {
     return this.attendanceService.getLatestScans();
   }
 
+  // ✅ SURVEILLANT a accès — lecture des absents
+  @Get('absents/:referentialId')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  async getAbsentsByReferential(
+    @Param('referentialId') referentialId: string,
+    @Query('date') date: string,
+  ) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    return this.attendanceService.getAbsentsByReferential(targetDate, referentialId);
+  }
 
-  // Dans attendance.controller.ts
+  // ✅ SURVEILLANT a accès — lecture des stats journalières
+  @Get('stats/daily')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  async getDailyStats(
+    @Query('date') date: string,
+    @Query('referentialId') referentialId?: string,
+  ) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    return this.attendanceService.getDailyStats(targetDate, referentialId);
+  }
 
-@Get('absents/:referentialId')
-async getAbsentsByReferential(
-  @Param('referentialId') referentialId: string,
-  @Query('date') date: string,
-) {
-  const targetDate = date || new Date().toISOString().split('T')[0];
-  return this.attendanceService.getAbsentsByReferential(targetDate, referentialId);
-}
-
-@Get('stats/daily')
-async getDailyStats(
-  @Query('date') date: string,
-  @Query('referentialId') referentialId?: string,
-) {
-  const targetDate = date || new Date().toISOString().split('T')[0];
-  return this.attendanceService.getDailyStats(targetDate, referentialId);
-}
-
+  // ✅ SURVEILLANT a accès — lecture des stats mensuelles
   @Get('stats/monthly')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Get monthly attendance statistics' })
-  @ApiQuery({ name: 'year', description: 'Year (YYYY)', required: true })
-  @ApiQuery({ name: 'month', description: 'Month (1-12)', required: true })
-  @ApiResponse({ status: 200, description: 'Monthly attendance statistics' })
   async getMonthlyStats(
     @Query('year') year: string,
     @Query('month') month: string,
   ): Promise<MonthlyStats> {
-    return this.attendanceService.getMonthlyStats(
-      parseInt(year, 10),
-      parseInt(month, 10),
-    );
+    return this.attendanceService.getMonthlyStats(parseInt(year, 10), parseInt(month, 10));
   }
 
+  // ✅ SURVEILLANT a accès — lecture des stats annuelles
   @Get('stats/yearly')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
   async getYearlyStats(@Query('year') year: string) {
     return this.attendanceService.getYearlyStats(parseInt(year, 10));
   }
 
+  // ✅ SURVEILLANT a accès — lecture des stats hebdomadaires
   @Get('stats/weekly')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Get weekly attendance statistics for a year' })
-  @ApiQuery({ name: 'year', description: 'Year (YYYY)', required: true })
   async getWeeklyStats(@Query('year') year: string) {
     return this.attendanceService.getWeeklyStats(parseInt(year, 10));
   }
 
+  // ❌ SURVEILLANT n'a pas accès — action ADMIN uniquement
   @Post('mark-absences')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Manually trigger absence marking' })
@@ -192,11 +185,10 @@ async getDailyStats(
     return this.attendanceService.markAbsentees();
   }
 
+  // ✅ SURVEILLANT a accès — lecture des présences par promotion
   @Get('promotion/:promotionId')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Get promotion attendance stats between dates' })
-  @ApiParam({ name: 'promotionId', description: 'ID of the promotion' })
-  @ApiQuery({ name: 'startDate', description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', description: 'End date (YYYY-MM-DD)' })
   async getPromotionAttendance(
     @Param('promotionId') promotionId: string,
     @Query('startDate') startDate: string,

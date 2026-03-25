@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   // ------------------ ADMIN ------------------
-  const adminPassword = await bcrypt.hash('Admin123!', 10);
+  const adminPassword = await bcrypt.hash('Admin1234!', 10);
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@sonatel-academy.sn' },
     update: {},
@@ -137,7 +137,42 @@ for (const c of coachesData) {
   });
   console.log(`✅ Coach ajouté : ${coach.email}`);
 }
+ // ------------------ SURVEILLANTS ------------------  ✅ NOUVEAU BLOC
+  const surveillantsData = [
+    {
+      firstName: 'Ibrahima',
+      lastName: 'Sarr',
+      email: 'ibrahima.surveillant@sonatel.sn',
+      phone: '+221787777777',
+    },
+    {
+      firstName: 'Rokhaya',
+      lastName: 'Mbaye',
+      email: 'rokhaya.surveillant@sonatel.sn',
+      phone: '+221788888888',
+    },
+  ];
 
+  for (const s of surveillantsData) {
+    const password = await bcrypt.hash('Surveil123!', 10);
+    const surveillant = await prisma.user.upsert({
+      where: { email: s.email },
+      update: {},
+      create: {
+        email: s.email,
+        password,
+        role: UserRole.SURVEILLANT,
+        surveillant: {
+          create: {
+            firstName: s.firstName,
+            lastName: s.lastName,
+            phone: s.phone,
+          },
+        },
+      },
+    });
+    console.log(`✅ Surveillant ajouté : ${surveillant.email}`);
+  }
 }
 
 main()

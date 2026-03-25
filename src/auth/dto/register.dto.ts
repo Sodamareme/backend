@@ -12,6 +12,7 @@ export class RegisterDto {
   password: string;
 
   @ApiProperty({ example: 'USER', required: false })
+  enum: ['ADMIN', 'COACH', 'APPRENANT', 'VIGIL', 'RESTAURATEUR', 'SURVEILLANT']
   @IsOptional()
   role?: string;
 }

@@ -61,7 +61,10 @@ export class UsersService {
         },
         restaurateur: {
           select: { photoUrl: true }
-        }
+        },
+        surveillant: {
+          select: { photoUrl: true }
+        },
       }
     });
 
@@ -82,6 +85,9 @@ export class UsersService {
         break;
       case UserRole.RESTAURATEUR:
         photoUrl = user.restaurateur?.photoUrl || null;
+        break;
+      case UserRole.SURVEILLANT:
+        photoUrl = user.surveillant?.photoUrl || null;
         break;
     }
 
@@ -113,6 +119,10 @@ export class UsersService {
         });
       case UserRole.RESTAURATEUR:
         return this.prisma.restaurateur.findFirst({
+          where: { userId: user.id }
+        });
+      case UserRole.SURVEILLANT:
+        return this.prisma.surveillant.findFirst({
           where: { userId: user.id }
         });
       default:
