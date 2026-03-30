@@ -7,6 +7,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
+import { getJwtSecret } from './jwt-secret';
 @Module({
   imports: [
     UsersModule,
@@ -14,7 +15,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
     JwtModule.registerAsync({
       useFactory: () => ({
-        secret: process.env.JWT_SECRET,
+        secret: getJwtSecret(),
         signOptions: { expiresIn: '1d' },
       }),
     }),
