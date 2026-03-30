@@ -1,5 +1,6 @@
 // grades.service.ts
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
@@ -168,9 +169,19 @@ export class GradesService {
         throw new NotFoundException('Note non trouvée');
       }
 
+      const data: Prisma.GradeUpdateInput = {};
+
+      if (updateGradeDto.value !== undefined) {
+        data.value = updateGradeDto.value;
+      }
+
+      if (updateGradeDto.comment !== undefined) {
+        data.comment = updateGradeDto.comment;
+      }
+
       const updated = await this.prisma.grade.update({
         where: { id },
-        data: updateGradeDto,
+        data,
         include: {
           module: {
             select: {
