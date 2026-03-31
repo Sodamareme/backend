@@ -37,7 +37,7 @@ export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
     private readonly cloudinaryService: CloudinaryService
-  ) {}
+  ) { }
 
   // ❌ SURVEILLANT n'a pas accès — réservé VIGIL uniquement
   @Post('scan')
@@ -141,7 +141,7 @@ export class AttendanceController {
 
   // ✅ SURVEILLANT a accès — lecture des stats journalières
   @Get('stats/daily')
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
   async getDailyStats(
     @Query('date') date: string,
     @Query('referentialId') referentialId?: string,
@@ -152,7 +152,7 @@ export class AttendanceController {
 
   // ✅ SURVEILLANT a accès — lecture des stats mensuelles
   @Get('stats/monthly')
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
   @ApiOperation({ summary: 'Get monthly attendance statistics' })
   async getMonthlyStats(
     @Query('year') year: string,
@@ -163,14 +163,14 @@ export class AttendanceController {
 
   // ✅ SURVEILLANT a accès — lecture des stats annuelles
   @Get('stats/yearly')
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
   async getYearlyStats(@Query('year') year: string) {
     return this.attendanceService.getYearlyStats(parseInt(year, 10));
   }
 
   // ✅ SURVEILLANT a accès — lecture des stats hebdomadaires
   @Get('stats/weekly')
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
   @ApiOperation({ summary: 'Get weekly attendance statistics for a year' })
   async getWeeklyStats(@Query('year') year: string) {
     return this.attendanceService.getWeeklyStats(parseInt(year, 10));
