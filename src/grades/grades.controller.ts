@@ -7,18 +7,12 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
   ValidationPipe,
   UsePipes,
   Logger,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { GradesService } from './grades.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-// ❌ SUPPRIMER CETTE LIGNE si vous ne l'utilisez pas
-// import { UserRole } from '@prisma/client';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 

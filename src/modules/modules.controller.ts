@@ -5,6 +5,7 @@ import {
   Put,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpStatus,
   UploadedFile,
@@ -57,7 +58,11 @@ export class ModulesController {
 
   @Get()
   @ApiOperation({ summary: 'Récupérer tous les modules' })
-  async findAll() {
+  async findAll(@Query('refId') refId?: string) {
+    if (refId) {
+      return this.modulesService.getModulesByReferential(refId);
+    }
+
     return this.modulesService.findAll();
   }
 
@@ -107,13 +112,14 @@ export class ModulesController {
     });
   }
 
-  @Put('grades/:gradeId')
+  @Put(':moduleId/grades/:gradeId')
   @Roles(UserRole.ADMIN, UserRole.COACH)
   @ApiOperation({ summary: 'Mettre à jour une note' })
   async updateGrade(
+    @Param('moduleId') moduleId: string,
     @Param('gradeId') gradeId: string,
     @Body() data: { value: number; comment?: string },
   ) {
-    return this.modulesService.updateGrade(gradeId, data);
+    return this.modulesService.updateGrade(moduleId, gradeId, data);
   }
 }

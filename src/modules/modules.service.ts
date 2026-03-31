@@ -1,8 +1,19 @@
 import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Module } from '@prisma/client';
+import { Module, Prisma } from '@prisma/client';
 import { CreateModuleDto } from './dto/create-module.dto';
+
+type ModuleUpdatePayload = {
+  name?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  coachId?: string;
+  refId?: string;
+  photoUrl?: string;
+  sessionId?: string | null;
+};
 
 @Injectable()
 export class ModulesService {
@@ -20,6 +31,16 @@ export class ModulesService {
     this.logger.log(`Création d’un module : ${data.name}`);
 
     let photoUrl: string | undefined;
+    const startDate = new Date(data.startDate);
+    const endDate = new Date(data.endDate);
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Dates de module invalides');
+    }
+
+    if (startDate > endDate) {
+      throw new BadRequestException('La date de début doit être antérieure à la date de fin');
+    }
 
     // Upload photo (si fournie)
     if (photoFile) {
@@ -37,8 +58,8 @@ export class ModulesService {
       data: {
         name: data.name,
         description: data.description,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        startDate,
+        endDate,
         photoUrl,
         coach: { connect: { id: data.coachId } },
         referential: { connect: { id: data.refId } },
@@ -96,12 +117,63 @@ export class ModulesService {
   /**
    * Mise à jour d’un module
    */
-  async update(id: string, data: Partial<Module>): Promise<Module> {
-    await this.findOne(id); // vérifie l’existence
+  async update(id: string, data: ModuleUpdatePayload): Promise<Module> {
+    const existingModule = await this.findOne(id); // vérifie l’existence
+
+    const updateData: Prisma.ModuleUpdateInput = {};
+
+    if (data.name !== undefined) {
+      updateData.name = data.name;
+    }
+
+    if (data.description !== undefined) {
+      updateData.description = data.description;
+    }
+
+    if (data.photoUrl !== undefined) {
+      updateData.photoUrl = data.photoUrl;
+    }
+
+    if (data.startDate !== undefined) {
+      const startDate = new Date(data.startDate);
+      if (Number.isNaN(startDate.getTime())) {
+        throw new BadRequestException('Date de début invalide');
+      }
+      updateData.startDate = startDate;
+    }
+
+    if (data.endDate !== undefined) {
+      const endDate = new Date(data.endDate);
+      if (Number.isNaN(endDate.getTime())) {
+        throw new BadRequestException('Date de fin invalide');
+      }
+      updateData.endDate = endDate;
+    }
+
+    const effectiveStartDate =
+      updateData.startDate instanceof Date ? updateData.startDate : existingModule.startDate;
+    const effectiveEndDate =
+      updateData.endDate instanceof Date ? updateData.endDate : existingModule.endDate;
+
+    if (effectiveStartDate > effectiveEndDate) {
+      throw new BadRequestException('La date de début doit être antérieure à la date de fin');
+    }
+
+    if (data.coachId !== undefined) {
+      updateData.coach = { connect: { id: data.coachId } };
+    }
+
+    if (data.refId !== undefined) {
+      updateData.referential = { connect: { id: data.refId } };
+    }
+
+    if (data.sessionId !== undefined) {
+      updateData.session = data.sessionId ? { connect: { id: data.sessionId } } : { disconnect: true };
+    }
 
     return this.prisma.module.update({
       where: { id },
-      data,
+      data: updateData,
       include: {
         coach: {
           select: { id: true, firstName: true, lastName: true },
@@ -139,7 +211,20 @@ export class ModulesService {
     });
   }
 
-  async updateGrade(gradeId: string, data: { value: number; comment?: string }) {
+  async updateGrade(moduleId: string, gradeId: string, data: { value: number; comment?: string }) {
+    await this.findOne(moduleId);
+    const existingGrade = await this.prisma.grade.findFirst({
+      where: {
+        id: gradeId,
+        moduleId,
+      },
+      select: { id: true },
+    });
+
+    if (!existingGrade) {
+      throw new NotFoundException('Note introuvable pour ce module');
+    }
+
     return this.prisma.grade.update({
       where: { id: gradeId },
       data,
