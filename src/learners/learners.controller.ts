@@ -35,7 +35,23 @@ import { BulkCreateLearnersDto } from './dto/BulkCreateLearnerDto';
 import { BulkImportResponseDto } from './dto/BulkImportResponseDto';
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
-import { CreateLearnerDto } from './dto/create-learner.dto';
+import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
+
+type LearnerTutorFormInput = Partial<CreateTutorDto>;
+
+type LearnerCreateFormData = Partial<Omit<CreateLearnerDto, 'tutor'>> & {
+  tutor?: LearnerTutorFormInput;
+  'tutor[firstName]'?: string;
+  'tutor[lastName]'?: string;
+  'tutor[phone]'?: string;
+  'tutor[email]'?: string;
+  'tutor[address]'?: string;
+  'tutor.firstName'?: string;
+  'tutor.lastName'?: string;
+  'tutor.phone'?: string;
+  'tutor.email'?: string;
+  'tutor.address'?: string;
+};
 
 @ApiTags('learners')
 @Controller('learners')
@@ -55,12 +71,12 @@ export class LearnersController {
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
   @ApiConsumes('multipart/form-data')
   async create(
-    @Body() data: any,
+    @Body() data: LearnerCreateFormData,
     @UploadedFile() photoFile?: Express.Multer.File,
   ) {
     this.logger.debug(`Received learner creation request (photo: ${photoFile ? 'yes' : 'no'})`);
 
-    let tutor: any = {};
+    let tutor: LearnerTutorFormInput = {};
 
     if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
       tutor = data.tutor;
@@ -82,6 +98,14 @@ export class LearnersController {
       );
     }
 
+    const normalizedTutor: CreateTutorDto = {
+      firstName: tutor.firstName,
+      lastName: tutor.lastName,
+      phone: tutor.phone,
+      email: tutor.email || undefined,
+      address: tutor.address || undefined,
+    };
+
     const cleanDto: CreateLearnerDto = {
       firstName:   data.firstName,
       lastName:    data.lastName,
@@ -95,7 +119,7 @@ export class LearnersController {
       refId:       data.refId     || undefined,
       sessionId:   data.sessionId || undefined,
       status:      data.status    || undefined,
-      tutor,
+      tutor: normalizedTutor,
     };
 
     this.logger.debug(`Forwarding learner creation to service for ${cleanDto.email ?? 'unknown-email'}`);
