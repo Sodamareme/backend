@@ -14,6 +14,73 @@ export class AttendanceService {
     private notificationsService: NotificationsService
   ) {}
 
+  private normalizeAttendanceDate(date: string): Date {
+    const attendanceDate = new Date(date);
+    if (Number.isNaN(attendanceDate.getTime())) {
+      throw new BadRequestException('Invalid attendance date');
+    }
+    attendanceDate.setHours(0, 0, 0, 0);
+    return attendanceDate;
+  }
+
+  private async resolveLearnerAttendanceRecord(attendanceId: string, date?: string) {
+    if (!attendanceId.startsWith('absent-')) {
+      const attendance = await this.prisma.learnerAttendance.findUnique({
+        where: { id: attendanceId },
+        include: {
+          learner: {
+            include: { referential: true },
+          },
+        },
+      });
+
+      if (!attendance) {
+        throw new NotFoundException('Attendance record not found');
+      }
+
+      return attendance;
+    }
+
+    if (!date) {
+      throw new BadRequestException('A date is required to update a generated absence record');
+    }
+
+    const learnerId = attendanceId.replace('absent-', '');
+    const attendanceDate = this.normalizeAttendanceDate(date);
+
+    const existingAttendance = await this.prisma.learnerAttendance.findFirst({
+      where: {
+        learnerId,
+        date: attendanceDate,
+      },
+      include: {
+        learner: {
+          include: { referential: true },
+        },
+      },
+    });
+
+    if (existingAttendance) {
+      return existingAttendance;
+    }
+
+    return this.prisma.learnerAttendance.create({
+      data: {
+        learnerId,
+        date: attendanceDate,
+        isPresent: false,
+        isLate: false,
+        status: AbsenceStatus.TO_JUSTIFY,
+        scanTime: null,
+      },
+      include: {
+        learner: {
+          include: { referential: true },
+        },
+      },
+    });
+  }
+
   private isWithinScanTime(scanTime: Date): boolean {
     const cutoffTime = new Date(
       scanTime.getFullYear(),
@@ -326,16 +393,10 @@ export class AttendanceService {
 async updateAbsenceStatus(
   attendanceId: string, 
   status: AbsenceStatus,
-  comment?: string
+  comment?: string,
+  date?: string
 ): Promise<LearnerAttendance> {
-  const attendance = await this.prisma.learnerAttendance.findUnique({
-    where: { id: attendanceId },
-    include: { learner: true }
-  });
-
-  if (!attendance) {
-    throw new NotFoundException('Attendance record not found');
-  }
+  const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
 
   // ✅ MODIFICATION : Permettre la mise à jour même si déjà traité
   // On refuse seulement si c'est déjà approuvé ET qu'on essaie d'approuver à nouveau
@@ -349,7 +410,7 @@ async updateAbsenceStatus(
   }
 
   const updatedAttendance = await this.prisma.learnerAttendance.update({
-    where: { id: attendanceId },
+    where: { id: attendance.id },
     data: { 
       status,
       justificationComment: comment 
@@ -366,19 +427,12 @@ async updateAbsenceStatus(
 
   return updatedAttendance;
 }
-async forceApprove(attendanceId: string): Promise<LearnerAttendance> {
-  const attendance = await this.prisma.learnerAttendance.findUnique({
-    where: { id: attendanceId },
-    include: { learner: true },
-  });
-
-  if (!attendance) {
-    throw new NotFoundException('Attendance record not found');
-  }
+async forceApprove(attendanceId: string, date?: string): Promise<LearnerAttendance> {
+  const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
 
   // ✅ Pas de vérification de justification — l'admin force l'autorisation
   const updated = await this.prisma.learnerAttendance.update({
-    where: { id: attendanceId },
+    where: { id: attendance.id },
     data: {
       status: AbsenceStatus.APPROVED,
       justificationComment: 'Autorisé par l\'administrateur',
@@ -1002,22 +1056,44 @@ async markAbsentees() {
       }
     });
   }
-  async updateAttendanceStatus(id: string, status: 'present' | 'late' | 'absent') {
-  const isPresent = status !== 'absent';
-  const isLate = status === 'late';
+  async updateAttendanceStatus(
+    id: string,
+    status: 'present' | 'late' | 'absent',
+    date?: string,
+  ) {
+    const isPresent = status !== 'absent';
+    const isLate = status === 'late';
 
-  return this.prisma.learnerAttendance.update({
-    where: { id },
-    data: {
-      isPresent,
-      isLate,
-      status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
-    },
-    include: {
-      learner: {
-        include: { referential: true }
-      }
+    if (id.startsWith('absent-')) {
+      const attendance = await this.resolveLearnerAttendanceRecord(id, date);
+
+      return this.prisma.learnerAttendance.update({
+        where: { id: attendance.id },
+        data: {
+          isPresent,
+          isLate,
+          status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
+        },
+        include: {
+          learner: {
+            include: { referential: true },
+          },
+        },
+      });
     }
-  });
-}
+
+    return this.prisma.learnerAttendance.update({
+      where: { id },
+      data: {
+        isPresent,
+        isLate,
+        status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
+      },
+      include: {
+        learner: {
+          include: { referential: true },
+        },
+      },
+    });
+  }
 }
