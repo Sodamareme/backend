@@ -3,17 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Module, Prisma } from '@prisma/client';
 import { CreateModuleDto } from './dto/create-module.dto';
-
-type ModuleUpdatePayload = {
-  name?: string;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  coachId?: string;
-  refId?: string;
-  photoUrl?: string;
-  sessionId?: string | null;
-};
+import { UpdateModuleDto } from './dto/update-module.dto';
 
 @Injectable()
 export class ModulesService {
@@ -117,7 +107,7 @@ export class ModulesService {
   /**
    * Mise à jour d’un module
    */
-  async update(id: string, data: ModuleUpdatePayload): Promise<Module> {
+  async update(id: string, data: UpdateModuleDto): Promise<Module> {
     const existingModule = await this.findOne(id); // vérifie l’existence
 
     const updateData: Prisma.ModuleUpdateInput = {};
