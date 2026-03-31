@@ -28,7 +28,7 @@ import { AddReferentialsDto } from './dto/add-referentials.dto';
 
 @ApiTags('promotions')
 @Controller('promotions')
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class PromotionsController {
   private readonly logger = new Logger(PromotionsController.name);
@@ -36,6 +36,7 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('photo'))
   async create(
     @Body() createPromotionDto: CreatePromotionDto,
@@ -105,7 +106,7 @@ export class PromotionsController {
   }
 
   @Post(':id/referentials')
-  // @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Add referentials to a promotion' })
   @ApiResponse({ status: 200, description: 'Referentials added successfully' })
   @ApiResponse({ status: 404, description: 'Promotion not found' })
