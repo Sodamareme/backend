@@ -19,6 +19,7 @@ import {
   Req,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CoachesService } from './coaches.service';
@@ -31,23 +32,25 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @Controller('coaches')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CoachesController {
-  constructor(private readonly coachesService: CoachesService) {}
+  private readonly logger = new Logger(CoachesController.name);
+
+  constructor(private readonly coachesService: CoachesService) { }
 
   // ========== HELPER FUNCTION ==========
   private getUserId(req: any): string {
     const userId = req.user?.id || req.user?.sub || req.user?.userId;
-    
+
     if (!userId) {
-      console.error('❌ No userId found in request. User object:', req.user);
+      this.logger.error(`No userId found in request: ${JSON.stringify(req.user)}`);
       throw new BadRequestException('User ID not found in token');
     }
-    
-    console.log('✅ Extracted userId:', userId);
+
+    this.logger.debug(`Extracted userId: ${userId}`);
     return userId;
   }
 
   // ========== ROUTES POUR LE COACH CONNECTÉ ==========
-  
+
   /**
    * Obtenir le profil du coach connecté
    * GET /coaches/me
@@ -56,10 +59,10 @@ export class CoachesController {
   @Roles('COACH')
   async getMyProfile(@Req() req) {
     const userId = this.getUserId(req);
-    console.log('👤 GET /coaches/me - userId:', userId);
-    
+    this.logger.debug(`GET /coaches/me - userId: ${userId}`);
+
     const coach = await this.coachesService.findByUserId(userId);
-    
+
     if (!coach) {
       throw new NotFoundException('Coach non trouvé');
     }
@@ -79,20 +82,20 @@ export class CoachesController {
     @Query('endDate') endDate?: string,
   ) {
     const userId = this.getUserId(req);
-    console.log('📊 GET /coaches/me/attendance - userId:', userId);
-    
+    this.logger.debug(`GET /coaches/me/attendance - userId: ${userId}`);
+
     const coach = await this.coachesService.findByUserId(userId);
-    
+
     if (!coach) {
       throw new NotFoundException('Coach non trouvé');
     }
 
-    console.log('✅ Coach found for attendance:', coach.id);
+    this.logger.debug(`Coach found for attendance: ${coach.id}`);
 
     // Dates par défaut : dernier mois
     const end = endDate ? new Date(endDate) : new Date();
-    const start = startDate 
-      ? new Date(startDate) 
+    const start = startDate
+      ? new Date(startDate)
       : new Date(end.getFullYear(), end.getMonth() - 1, end.getDate());
 
     return this.coachesService.getCoachAttendanceHistory(coach.id, start, end);
@@ -110,10 +113,10 @@ export class CoachesController {
     @Query('year') year?: string,
   ) {
     const userId = this.getUserId(req);
-    console.log('📈 GET /coaches/me/attendance/stats - userId:', userId);
-    
+    this.logger.debug(`GET /coaches/me/attendance/stats - userId: ${userId}`);
+
     const coach = await this.coachesService.findByUserId(userId);
-    
+
     if (!coach) {
       throw new NotFoundException('Coach non trouvé');
     }
@@ -122,7 +125,7 @@ export class CoachesController {
     const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
 
-    console.log('📊 Fetching stats for:', { month: targetMonth, year: targetYear });
+    this.logger.debug(`Fetching stats for month=${targetMonth}, year=${targetYear}`);
 
     return this.coachesService.getCoachAttendanceStats(coach.id, targetYear, targetMonth);
   }
@@ -133,42 +136,42 @@ export class CoachesController {
    */
   // coaches.controller.ts — getMyTodayAttendance
 
-@Get('me/attendance/today')
-@Roles('COACH')
-async getMyTodayAttendance(@Req() req) {
-  const userId = this.getUserId(req);
-  const coach = await this.coachesService.findByUserId(userId);
-  
-  if (!coach) throw new NotFoundException('Coach non trouvé');
+  @Get('me/attendance/today')
+  @Roles('COACH')
+  async getMyTodayAttendance(@Req() req) {
+    const userId = this.getUserId(req);
+    const coach = await this.coachesService.findByUserId(userId);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+    if (!coach) throw new NotFoundException('Coach non trouvé');
 
-  const attendance = await this.coachesService.getTodayAttendanceForCoach(coach.id, today);
-  
-  if (!attendance) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  // ✅ attendance est déjà un objet Prisma brut ici — toISOString() est valide
-  return {
-    id: attendance.id,
-    date: attendance.date instanceof Date 
-      ? attendance.date.toISOString() 
-      : attendance.date,
-    checkIn: attendance.checkIn ? {
-      time: attendance.checkIn instanceof Date 
-        ? attendance.checkIn.toISOString() 
-        : attendance.checkIn,
+    const attendance = await this.coachesService.getTodayAttendanceForCoach(coach.id, today);
+
+    if (!attendance) return null;
+
+    // ✅ attendance est déjà un objet Prisma brut ici — toISOString() est valide
+    return {
+      id: attendance.id,
+      date: attendance.date instanceof Date
+        ? attendance.date.toISOString()
+        : attendance.date,
+      checkIn: attendance.checkIn ? {
+        time: attendance.checkIn instanceof Date
+          ? attendance.checkIn.toISOString()
+          : attendance.checkIn,
+        isLate: attendance.isLate,
+      } : null,
+      ccheckOut: attendance.checkOut ? {
+        time: attendance.checkOut instanceof Date
+          ? attendance.checkOut.toISOString()
+          : attendance.checkOut,
+      } : null,
+      isPresent: attendance.isPresent,
       isLate: attendance.isLate,
-    } : null,
-    ccheckOut: attendance.checkOut ? {
-  time: attendance.checkOut instanceof Date
-    ? attendance.checkOut.toISOString()
-    : attendance.checkOut,
-} : null,
-    isPresent: attendance.isPresent,
-    isLate: attendance.isLate,
-  };
-}
+    };
+  }
 
   /**
    * Auto-pointage pour le coach connecté
@@ -178,10 +181,10 @@ async getMyTodayAttendance(@Req() req) {
   @Roles('COACH')
   async selfCheckIn(@Req() req) {
     const userId = this.getUserId(req);
-    console.log('➕ POST /coaches/me/self-checkin - userId:', userId);
-    
+    this.logger.debug(`POST /coaches/me/self-checkin - userId: ${userId}`);
+
     const coach = await this.coachesService.findByUserId(userId);
-    
+
     if (!coach) {
       throw new NotFoundException('Coach non trouvé');
     }
@@ -203,7 +206,7 @@ async getMyTodayAttendance(@Req() req) {
    * GET ALL COACHES
    */
   @Get()
-  @Roles('ADMIN','VIGIL')
+  @Roles('ADMIN', 'VIGIL')
   async findAll() {
     return await this.coachesService.findAll();
   }
@@ -221,12 +224,12 @@ async getMyTodayAttendance(@Req() req) {
    * SCAN ATTENDANCE (POINTAGE/DEPOINTAGE)
    */
   @Post('scan-attendance')
-  @Roles('ADMIN','VIGIL')
+  @Roles('ADMIN', 'VIGIL')
   @HttpCode(HttpStatus.OK)
   async scanAttendance(@Body() body: any) {
     const qrData = body.qrData;
-    console.log('📥 Body reçu:', JSON.stringify(body)); 
-    
+    this.logger.debug(`Scan attendance body received: ${JSON.stringify(body)}`);
+
     return await this.coachesService.scanAttendance(qrData);
   }
 
@@ -256,7 +259,7 @@ async getMyTodayAttendance(@Req() req) {
    * GET ONE COACH
    */
   @Get(':id')
-  @Roles('ADMIN', 'COACH','VIGIL')
+  @Roles('ADMIN', 'COACH', 'VIGIL')
   async findOne(@Param('id') id: string) {
     return await this.coachesService.findOne(id);
   }
@@ -272,10 +275,10 @@ async getMyTodayAttendance(@Req() req) {
     @Query('endDate') endDate?: string,
   ) {
     const end = endDate ? new Date(endDate) : new Date();
-    const start = startDate 
-      ? new Date(startDate) 
+    const start = startDate
+      ? new Date(startDate)
       : new Date(end.getFullYear(), end.getMonth() - 1, end.getDate());
-    
+
     return await this.coachesService.getCoachAttendanceHistory(coachId, start, end);
   }
 
@@ -296,10 +299,10 @@ async getMyTodayAttendance(@Req() req) {
         ],
         fileIsRequired: false,
       }),
-    )
+  )
     photo?: Express.Multer.File,
   ) {
-     console.log('=== UPDATE COACH DTO ===', JSON.stringify(updateCoachDto, null, 2));
+    this.logger.debug(`Update coach payload: ${JSON.stringify(updateCoachDto)}`);
     return await this.coachesService.update(id, updateCoachDto, photo);
   }
 
@@ -311,5 +314,5 @@ async getMyTodayAttendance(@Req() req) {
   async remove(@Param('id') id: string) {
     return await this.coachesService.remove(id);
   }
-  
+
 }

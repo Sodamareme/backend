@@ -14,6 +14,7 @@ import {
   ForbiddenException,
   Request,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -34,12 +35,30 @@ import { BulkCreateLearnersDto } from './dto/BulkCreateLearnerDto';
 import { BulkImportResponseDto } from './dto/BulkImportResponseDto';
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
-import { CreateLearnerDto } from './dto/create-learner.dto';
+import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
+
+type LearnerTutorFormInput = Partial<CreateTutorDto>;
+
+type LearnerCreateFormData = Partial<Omit<CreateLearnerDto, 'tutor'>> & {
+  tutor?: LearnerTutorFormInput;
+  'tutor[firstName]'?: string;
+  'tutor[lastName]'?: string;
+  'tutor[phone]'?: string;
+  'tutor[email]'?: string;
+  'tutor[address]'?: string;
+  'tutor.firstName'?: string;
+  'tutor.lastName'?: string;
+  'tutor.phone'?: string;
+  'tutor.email'?: string;
+  'tutor.address'?: string;
+};
 
 @ApiTags('learners')
 @Controller('learners')
 @ApiBearerAuth()
 export class LearnersController {
+  private readonly logger = new Logger(LearnersController.name);
+
   constructor(private readonly learnersService: LearnersService) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -52,17 +71,12 @@ export class LearnersController {
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
   @ApiConsumes('multipart/form-data')
   async create(
-    @Body() data: any,
+    @Body() data: LearnerCreateFormData,
     @UploadedFile() photoFile?: Express.Multer.File,
   ) {
-    console.log('=== PHOTO FILE REÇU ===', photoFile ? {
-      fieldname: photoFile.fieldname,
-      originalname: photoFile.originalname,
-      mimetype: photoFile.mimetype,
-      size: photoFile.size,
-    } : 'AUCUNE PHOTO');
+    this.logger.debug(`Received learner creation request (photo: ${photoFile ? 'yes' : 'no'})`);
 
-    let tutor: any = {};
+    let tutor: LearnerTutorFormInput = {};
 
     if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
       tutor = data.tutor;
@@ -76,13 +90,21 @@ export class LearnersController {
       };
     }
 
-    console.log('=== TUTOR RECONSTRUIT ===', tutor);
+    this.logger.debug('Tutor payload normalized for learner creation');
 
     if (!tutor.firstName || !tutor.lastName || !tutor.phone) {
       throw new BadRequestException(
         'Les informations du tuteur sont incomplètes (firstName, lastName, phone requis)',
       );
     }
+
+    const normalizedTutor: CreateTutorDto = {
+      firstName: tutor.firstName,
+      lastName: tutor.lastName,
+      phone: tutor.phone,
+      email: tutor.email || undefined,
+      address: tutor.address || undefined,
+    };
 
     const cleanDto: CreateLearnerDto = {
       firstName:   data.firstName,
@@ -97,10 +119,10 @@ export class LearnersController {
       refId:       data.refId     || undefined,
       sessionId:   data.sessionId || undefined,
       status:      data.status    || undefined,
-      tutor,
+      tutor: normalizedTutor,
     };
 
-    console.log('=== DTO PROPRE ENVOYÉ AU SERVICE ===', JSON.stringify(cleanDto, null, 2));
+    this.logger.debug(`Forwarding learner creation to service for ${cleanDto.email ?? 'unknown-email'}`);
 
     return this.learnersService.create(cleanDto, photoFile);
   }
@@ -189,7 +211,7 @@ export class LearnersController {
   @ApiResponse({ status: 404, description: 'Learner not found' })
   @ApiResponse({ status: 403, description: 'Forbidden - Can only access own data' })
   async findByEmail(@Param('email') email: string, @Request() req): Promise<Learner> {
-    console.log('Hitting findByEmail endpoint with email:', email);
+    this.logger.debug(`Looking up learner by email: ${email}`);
     if (req.user.role !== UserRole.ADMIN && req.user.email !== email) {
       throw new ForbiddenException('You can only access your own data');
     }

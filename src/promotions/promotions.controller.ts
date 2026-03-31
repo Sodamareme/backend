@@ -25,10 +25,15 @@ import { Promotion, PromotionStatus, UserRole } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { AddReferentialsDto } from './dto/add-referentials.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 @ApiTags('promotions')
 @Controller('promotions')
+<<<<<<< chore/backend-standardize-auth-protection
 @UseGuards(JwtAuthGuard, RolesGuard)
+=======
+>>>>>>> develop
 @ApiBearerAuth()
 export class PromotionsController {
   private readonly logger = new Logger(PromotionsController.name);
@@ -36,6 +41,10 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Post()
+<<<<<<< chore/backend-standardize-auth-protection
+=======
+  @UseGuards(JwtAuthGuard, RolesGuard)
+>>>>>>> develop
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('photo'))
   async create(
@@ -85,10 +94,11 @@ export class PromotionsController {
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Mettre à jour une promotion' })
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.promotionsService.update(id, data);
+  async update(@Param('id') id: string, @Body() updatePromotionDto: UpdatePromotionDto) {
+    return this.promotionsService.update(id, updatePromotionDto);
   }
 
   @Patch(':id/status')
@@ -99,13 +109,17 @@ export class PromotionsController {
   @ApiResponse({ status: 404, description: 'Promotion not found' })
   async updateStatus(
     @Param('id') id: string,
-    @Body() updateStatusDto: { status: PromotionStatus }
+    @Body() updateStatusDto: UpdateStatusDto,
   ): Promise<Promotion> {
     this.logger.debug(`Updating status for promotion ${id} to ${updateStatusDto.status}`);
     return this.promotionsService.update(id, { status: updateStatusDto.status });
   }
 
   @Post(':id/referentials')
+<<<<<<< chore/backend-standardize-auth-protection
+=======
+  @UseGuards(JwtAuthGuard, RolesGuard)
+>>>>>>> develop
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Add referentials to a promotion' })
   @ApiResponse({ status: 200, description: 'Referentials added successfully' })
