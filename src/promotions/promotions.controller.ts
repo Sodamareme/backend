@@ -30,6 +30,10 @@ import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 @ApiTags('promotions')
 @Controller('promotions')
+<<<<<<< chore/backend-standardize-auth-protection
+@UseGuards(JwtAuthGuard, RolesGuard)
+=======
+>>>>>>> develop
 @ApiBearerAuth()
 export class PromotionsController {
   private readonly logger = new Logger(PromotionsController.name);
@@ -37,7 +41,10 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Post()
+<<<<<<< chore/backend-standardize-auth-protection
+=======
   @UseGuards(JwtAuthGuard, RolesGuard)
+>>>>>>> develop
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('photo'))
   async create(
@@ -109,7 +116,10 @@ export class PromotionsController {
   }
 
   @Post(':id/referentials')
+<<<<<<< chore/backend-standardize-auth-protection
+=======
   @UseGuards(JwtAuthGuard, RolesGuard)
+>>>>>>> develop
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Add referentials to a promotion' })
   @ApiResponse({ status: 200, description: 'Referentials added successfully' })
