@@ -24,27 +24,18 @@ import { CreateReferentialDto } from './dto/create-referential.dto';
 
 @ApiTags('referentials')
 @Controller('referentials')
-<<<<<<< chore/backend-standardize-auth-protection
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
-=======
->>>>>>> develop
 export class ReferentialsController {
   private readonly logger = new Logger(ReferentialsController.name);
 
   constructor(
     private readonly referentialsService: ReferentialsService,
     private readonly cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   @Post()
-<<<<<<< chore/backend-standardize-auth-protection
-  @Roles(UserRole.ADMIN)
-=======
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
->>>>>>> develop
   @ApiOperation({ summary: 'Create a new referential' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Referential created' })
   @ApiConsumes('multipart/form-data')
@@ -111,7 +102,7 @@ export class ReferentialsController {
     return this.referentialsService.findAll();
   }
 
-  @Get("all")
+  @Get('all')
   @ApiOperation({ summary: 'Récupérer tous les référentiels' })
   async findAllReferentials() {
     return this.referentialsService.findAllReferentials();
