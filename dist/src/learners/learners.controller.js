@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var LearnersController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LearnersController = void 0;
 const common_1 = require("@nestjs/common");
@@ -26,17 +27,13 @@ const BulkCreateLearnerDto_1 = require("./dto/BulkCreateLearnerDto");
 const BulkImportResponseDto_1 = require("./dto/BulkImportResponseDto");
 const ValidationResponseDto_1 = require("./dto/ValidationResponseDto ");
 const public_decorators_1 = require("../auth/decorators/public.decorators");
-let LearnersController = class LearnersController {
+let LearnersController = LearnersController_1 = class LearnersController {
     constructor(learnersService) {
         this.learnersService = learnersService;
+        this.logger = new common_1.Logger(LearnersController_1.name);
     }
     async create(data, photoFile) {
-        console.log('=== PHOTO FILE REÇU ===', photoFile ? {
-            fieldname: photoFile.fieldname,
-            originalname: photoFile.originalname,
-            mimetype: photoFile.mimetype,
-            size: photoFile.size,
-        } : 'AUCUNE PHOTO');
+        this.logger.debug(`Received learner creation request (photo: ${photoFile ? 'yes' : 'no'})`);
         let tutor = {};
         if (data.tutor && typeof data.tutor === 'object' && data.tutor.firstName) {
             tutor = data.tutor;
@@ -50,10 +47,17 @@ let LearnersController = class LearnersController {
                 address: data['tutor[address]'] || data['tutor.address'] || data?.tutor?.address || '',
             };
         }
-        console.log('=== TUTOR RECONSTRUIT ===', tutor);
+        this.logger.debug('Tutor payload normalized for learner creation');
         if (!tutor.firstName || !tutor.lastName || !tutor.phone) {
             throw new common_1.BadRequestException('Les informations du tuteur sont incomplètes (firstName, lastName, phone requis)');
         }
+        const normalizedTutor = {
+            firstName: tutor.firstName,
+            lastName: tutor.lastName,
+            phone: tutor.phone,
+            email: tutor.email || undefined,
+            address: tutor.address || undefined,
+        };
         const cleanDto = {
             firstName: data.firstName,
             lastName: data.lastName,
@@ -67,9 +71,9 @@ let LearnersController = class LearnersController {
             refId: data.refId || undefined,
             sessionId: data.sessionId || undefined,
             status: data.status || undefined,
-            tutor,
+            tutor: normalizedTutor,
         };
-        console.log('=== DTO PROPRE ENVOYÉ AU SERVICE ===', JSON.stringify(cleanDto, null, 2));
+        this.logger.debug(`Forwarding learner creation to service for ${cleanDto.email ?? 'unknown-email'}`);
         return this.learnersService.create(cleanDto, photoFile);
     }
     async validateBulkImport(file) {
@@ -112,7 +116,7 @@ let LearnersController = class LearnersController {
         return this.learnersService.getWaitingList(promotionId);
     }
     async findByEmail(email, req) {
-        console.log('Hitting findByEmail endpoint with email:', email);
+        this.logger.debug(`Looking up learner by email: ${email}`);
         if (req.user.role !== client_1.UserRole.ADMIN && req.user.email !== email) {
             throw new common_1.ForbiddenException('You can only access your own data');
         }
@@ -163,6 +167,7 @@ let LearnersController = class LearnersController {
 exports.LearnersController = LearnersController;
 __decorate([
     (0, common_1.Post)(),
+    (0, public_decorators_1.Public)(),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('photoFile')),
     (0, swagger_1.ApiOperation)({ summary: 'Créer un nouvel apprenant' }),
     (0, swagger_1.ApiResponse)({ status: common_1.HttpStatus.CREATED, description: 'Apprenant créé' }),
@@ -379,7 +384,7 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], LearnersController.prototype, "getDocuments", null);
-exports.LearnersController = LearnersController = __decorate([
+exports.LearnersController = LearnersController = LearnersController_1 = __decorate([
     (0, swagger_1.ApiTags)('learners'),
     (0, common_1.Controller)('learners'),
     (0, swagger_1.ApiBearerAuth)(),

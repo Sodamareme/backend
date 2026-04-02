@@ -7,73 +7,75 @@ export declare class AttendanceService {
     private notificationsService;
     private readonly logger;
     constructor(prisma: PrismaService, notificationsService: NotificationsService);
+    private normalizeAttendanceDate;
+    private resolveLearnerAttendanceRecord;
     private isWithinScanTime;
     scan(matricule: string): Promise<LearnerScanResponse | CoachScanResponse>;
     findLearnerByMatricule(matricule: string): Promise<{
+        user: {
+            id: string;
+            email: string;
+            password: string;
+            role: import(".prisma/client").$Enums.UserRole;
+            createdAt: Date;
+            updatedAt: Date;
+        };
         promotion: {
             id: string;
-            photoUrl: string | null;
-            status: import(".prisma/client").$Enums.PromotionStatus;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
+            status: import(".prisma/client").$Enums.PromotionStatus;
             startDate: Date;
             endDate: Date;
         };
         referential: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
             sessionLength: number | null;
         };
-        user: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            email: string;
-            password: string;
-            role: import(".prisma/client").$Enums.UserRole;
-        };
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
+        phone: string;
+        userId: string;
+        photoUrl: string | null;
+        matricule: string;
+        qrCode: string;
         address: string | null;
         gender: import(".prisma/client").$Enums.Gender;
         birthDate: Date;
         birthPlace: string;
-        phone: string;
-        photoUrl: string | null;
         status: import(".prisma/client").$Enums.LearnerStatus;
-        qrCode: string;
-        userId: string;
         refId: string | null;
         promotionId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        matricule: string;
         sessionId: string | null;
     }>;
     findCoachByMatricule(matricule: string): Promise<{
         user: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
             email: string;
             password: string;
             role: import(".prisma/client").$Enums.UserRole;
+            createdAt: Date;
+            updatedAt: Date;
         };
         referentials: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
@@ -81,55 +83,55 @@ export declare class AttendanceService {
         }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
-        qrCode: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
+        qrCode: string | null;
     }>;
     scanLearner(matricule: string): Promise<LearnerScanResponse>;
     scanCoach(matricule: string): Promise<CoachScanResponse>;
     submitAbsenceJustification(attendanceId: string, justification: string, documentUrl?: string): Promise<{
         learner: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
             status: import(".prisma/client").$Enums.LearnerStatus;
-            qrCode: string;
-            userId: string;
             refId: string | null;
             promotionId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
-    updateAbsenceStatus(attendanceId: string, status: AbsenceStatus, comment?: string): Promise<LearnerAttendance>;
-    forceApprove(attendanceId: string): Promise<LearnerAttendance>;
+    updateAbsenceStatus(attendanceId: string, status: AbsenceStatus, comment?: string, date?: string): Promise<LearnerAttendance>;
+    forceApprove(attendanceId: string, date?: string): Promise<LearnerAttendance>;
     getLatestScans(limit?: number): Promise<{
         learnerScans: {
             id: string;
@@ -209,13 +211,13 @@ export declare class AttendanceService {
         attendance: ({
             id: string;
             date: string;
-            scanTime: string;
+            scanTime: any;
             isPresent: boolean;
             isLate: boolean;
-            status: import(".prisma/client").$Enums.AbsenceStatus;
-            justification: string;
-            documentUrl: string;
-            justificationComment: string;
+            status: "TO_JUSTIFY";
+            justification: any;
+            documentUrl: any;
+            justificationComment: any;
             learner: {
                 id: string;
                 firstName: string;
@@ -231,13 +233,13 @@ export declare class AttendanceService {
         } | {
             id: string;
             date: string;
-            scanTime: any;
+            scanTime: string;
             isPresent: boolean;
             isLate: boolean;
-            status: "TO_JUSTIFY";
-            justification: any;
-            documentUrl: any;
-            justificationComment: any;
+            status: import(".prisma/client").$Enums.AbsenceStatus;
+            justification: string;
+            documentUrl: string;
+            justificationComment: string;
             learner: {
                 id: string;
                 firstName: string;
@@ -271,20 +273,20 @@ export declare class AttendanceService {
         learner: {
             promotion: {
                 id: string;
-                photoUrl: string | null;
-                status: import(".prisma/client").$Enums.PromotionStatus;
                 createdAt: Date;
                 updatedAt: Date;
                 name: string;
+                photoUrl: string | null;
+                status: import(".prisma/client").$Enums.PromotionStatus;
                 startDate: Date;
                 endDate: Date;
             };
             referential: {
                 id: string;
-                photoUrl: string | null;
                 createdAt: Date;
                 updatedAt: Date;
                 name: string;
+                photoUrl: string | null;
                 description: string | null;
                 capacity: number;
                 numberOfSessions: number;
@@ -292,45 +294,45 @@ export declare class AttendanceService {
             };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
             status: import(".prisma/client").$Enums.LearnerStatus;
-            qrCode: string;
-            userId: string;
             refId: string | null;
             promotionId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     })[] | ({
         coach: {
             referentials: {
                 id: string;
-                photoUrl: string | null;
                 createdAt: Date;
                 updatedAt: Date;
                 name: string;
+                photoUrl: string | null;
                 description: string | null;
                 capacity: number;
                 numberOfSessions: number;
@@ -338,26 +340,26 @@ export declare class AttendanceService {
             }[];
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
             phone: string | null;
-            photoUrl: string | null;
-            qrCode: string | null;
             userId: string;
-            createdAt: Date;
-            updatedAt: Date;
+            photoUrl: string | null;
             matricule: string;
+            qrCode: string | null;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        coachId: string;
         date: Date;
         isPresent: boolean;
         isLate: boolean;
         checkIn: Date | null;
         checkOut: Date | null;
-        coachId: string;
     })[]>;
     getPromotionAttendance(promotionId: string, startDate: Date, endDate: Date): Promise<{
         date: string;
@@ -378,26 +380,26 @@ export declare class AttendanceService {
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     })[]>;
-    updateAttendanceStatus(id: string, status: 'present' | 'late' | 'absent'): Promise<{
+    updateAttendanceStatus(id: string, status: 'present' | 'late' | 'absent', date?: string): Promise<{
         learner: {
             referential: {
                 id: string;
-                photoUrl: string | null;
                 createdAt: Date;
                 updatedAt: Date;
                 name: string;
+                photoUrl: string | null;
                 description: string | null;
                 capacity: number;
                 numberOfSessions: number;
@@ -405,36 +407,36 @@ export declare class AttendanceService {
             };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
             status: import(".prisma/client").$Enums.LearnerStatus;
-            qrCode: string;
-            userId: string;
             refId: string | null;
             promotionId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
 }

@@ -160,9 +160,16 @@ let GradesService = GradesService_1 = class GradesService {
             if (!grade) {
                 throw new common_1.NotFoundException('Note non trouvée');
             }
+            const data = {};
+            if (updateGradeDto.value !== undefined) {
+                data.value = updateGradeDto.value;
+            }
+            if (updateGradeDto.comment !== undefined) {
+                data.comment = updateGradeDto.comment;
+            }
             const updated = await this.prisma.grade.update({
                 where: { id },
-                data: updateGradeDto,
+                data,
                 include: {
                     module: {
                         select: {

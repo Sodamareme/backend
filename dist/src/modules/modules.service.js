@@ -23,6 +23,14 @@ let ModulesService = ModulesService_1 = class ModulesService {
     async create(data, photoFile) {
         this.logger.log(`Création d’un module : ${data.name}`);
         let photoUrl;
+        const startDate = new Date(data.startDate);
+        const endDate = new Date(data.endDate);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+            throw new common_1.BadRequestException('Dates de module invalides');
+        }
+        if (startDate > endDate) {
+            throw new common_1.BadRequestException('La date de début doit être antérieure à la date de fin');
+        }
         if (photoFile) {
             try {
                 const uploadResult = await this.cloudinary.uploadFile(photoFile, 'modules');
@@ -37,8 +45,8 @@ let ModulesService = ModulesService_1 = class ModulesService {
             data: {
                 name: data.name,
                 description: data.description,
-                startDate: new Date(data.startDate),
-                endDate: new Date(data.endDate),
+                startDate,
+                endDate,
                 photoUrl,
                 coach: { connect: { id: data.coachId } },
                 referential: { connect: { id: data.refId } },
@@ -82,10 +90,48 @@ let ModulesService = ModulesService_1 = class ModulesService {
         return module;
     }
     async update(id, data) {
-        await this.findOne(id);
+        const existingModule = await this.findOne(id);
+        const updateData = {};
+        if (data.name !== undefined) {
+            updateData.name = data.name;
+        }
+        if (data.description !== undefined) {
+            updateData.description = data.description;
+        }
+        if (data.photoUrl !== undefined) {
+            updateData.photoUrl = data.photoUrl;
+        }
+        if (data.startDate !== undefined) {
+            const startDate = new Date(data.startDate);
+            if (Number.isNaN(startDate.getTime())) {
+                throw new common_1.BadRequestException('Date de début invalide');
+            }
+            updateData.startDate = startDate;
+        }
+        if (data.endDate !== undefined) {
+            const endDate = new Date(data.endDate);
+            if (Number.isNaN(endDate.getTime())) {
+                throw new common_1.BadRequestException('Date de fin invalide');
+            }
+            updateData.endDate = endDate;
+        }
+        const effectiveStartDate = updateData.startDate instanceof Date ? updateData.startDate : existingModule.startDate;
+        const effectiveEndDate = updateData.endDate instanceof Date ? updateData.endDate : existingModule.endDate;
+        if (effectiveStartDate > effectiveEndDate) {
+            throw new common_1.BadRequestException('La date de début doit être antérieure à la date de fin');
+        }
+        if (data.coachId !== undefined) {
+            updateData.coach = { connect: { id: data.coachId } };
+        }
+        if (data.refId !== undefined) {
+            updateData.referential = { connect: { id: data.refId } };
+        }
+        if (data.sessionId !== undefined) {
+            updateData.session = data.sessionId ? { connect: { id: data.sessionId } } : { disconnect: true };
+        }
         return this.prisma.module.update({
             where: { id },
-            data,
+            data: updateData,
             include: {
                 coach: {
                     select: { id: true, firstName: true, lastName: true },
@@ -112,7 +158,18 @@ let ModulesService = ModulesService_1 = class ModulesService {
             },
         });
     }
-    async updateGrade(gradeId, data) {
+    async updateGrade(moduleId, gradeId, data) {
+        await this.findOne(moduleId);
+        const existingGrade = await this.prisma.grade.findFirst({
+            where: {
+                id: gradeId,
+                moduleId,
+            },
+            select: { id: true },
+        });
+        if (!existingGrade) {
+            throw new common_1.NotFoundException('Note introuvable pour ce module');
+        }
         return this.prisma.grade.update({
             where: { id: gradeId },
             data,

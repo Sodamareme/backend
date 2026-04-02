@@ -66,6 +66,7 @@ export class LearnersController {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Post()
+  @Public()
   @UseInterceptors(FileInterceptor('photoFile'))
   @ApiOperation({ summary: 'Créer un nouvel apprenant' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })

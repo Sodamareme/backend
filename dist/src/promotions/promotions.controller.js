@@ -21,9 +21,12 @@ const promotions_service_1 = require("./promotions.service");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
+const public_decorators_1 = require("../auth/decorators/public.decorators");
 const client_1 = require("@prisma/client");
 const create_promotion_dto_1 = require("./dto/create-promotion.dto");
 const add_referentials_dto_1 = require("./dto/add-referentials.dto");
+const update_status_dto_1 = require("./dto/update-status.dto");
+const update_promotion_dto_1 = require("./dto/update-promotion.dto");
 let PromotionsController = PromotionsController_1 = class PromotionsController {
     constructor(promotionsService) {
         this.promotionsService = promotionsService;
@@ -50,8 +53,8 @@ let PromotionsController = PromotionsController_1 = class PromotionsController {
     async getStatistics(id) {
         return this.promotionsService.getStatistics(id);
     }
-    async update(id, data) {
-        return this.promotionsService.update(id, data);
+    async update(id, updatePromotionDto) {
+        return this.promotionsService.update(id, updatePromotionDto);
     }
     async updateStatus(id, updateStatusDto) {
         this.logger.debug(`Updating status for promotion ${id} to ${updateStatusDto.status}`);
@@ -65,6 +68,7 @@ let PromotionsController = PromotionsController_1 = class PromotionsController {
 exports.PromotionsController = PromotionsController;
 __decorate([
     (0, common_1.Post)(),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('photo')),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.UploadedFile)(new common_1.ParseFilePipe({
@@ -79,6 +83,7 @@ __decorate([
 ], PromotionsController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, public_decorators_1.Public)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer toutes les promotions' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -86,6 +91,7 @@ __decorate([
 ], PromotionsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)('active'),
+    (0, public_decorators_1.Public)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer la promotion active' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -109,12 +115,13 @@ __decorate([
 ], PromotionsController.prototype, "getStatistics", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Mettre à jour une promotion' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, update_promotion_dto_1.UpdatePromotionDto]),
     __metadata("design:returntype", Promise)
 ], PromotionsController.prototype, "update", null);
 __decorate([
@@ -127,11 +134,12 @@ __decorate([
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, update_status_dto_1.UpdateStatusDto]),
     __metadata("design:returntype", Promise)
 ], PromotionsController.prototype, "updateStatus", null);
 __decorate([
     (0, common_1.Post)(':id/referentials'),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Add referentials to a promotion' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Referentials added successfully' }),
     (0, swagger_1.ApiResponse)({ status: 404, description: 'Promotion not found' }),
@@ -145,6 +153,7 @@ __decorate([
 exports.PromotionsController = PromotionsController = PromotionsController_1 = __decorate([
     (0, swagger_1.ApiTags)('promotions'),
     (0, common_1.Controller)('promotions'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __metadata("design:paramtypes", [promotions_service_1.PromotionsService])
 ], PromotionsController);
