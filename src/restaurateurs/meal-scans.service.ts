@@ -12,24 +12,6 @@ import { MealType } from '@prisma/client';
 export class MealScansService {
   constructor(private prisma: PrismaService) {}
 
-  private getCurrentMealType(now: Date): MealType {
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const currentTimeInMinutes = hours * 60 + minutes;
-
-    if (currentTimeInMinutes < 6 * 60) {
-      throw new BadRequestException(
-        'Le scan des repas commence a 06:00. Veuillez reessayer plus tard.',
-      );
-    }
-
-    if (currentTimeInMinutes < 11 * 60 + 30) {
-      return 'BREAKFAST';
-    }
-
-    return 'LUNCH';
-  }
-
   async create(dto: CreateMealScanDto, restaurateurUserId?: string) {
     if (!restaurateurUserId) {
       throw new BadRequestException('Utilisateur restaurateur introuvable dans le token.');
@@ -44,7 +26,7 @@ export class MealScansService {
     }
 
     const scannedAt = new Date();
-    const type = this.getCurrentMealType(scannedAt);
+    const type: MealType = dto.type;
 
     // Vérifier si déjà scanné aujourd'hui
     const startOfDay = new Date(scannedAt);
