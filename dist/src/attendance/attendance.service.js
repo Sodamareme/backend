@@ -22,6 +22,64 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         this.notificationsService = notificationsService;
         this.logger = new common_1.Logger(AttendanceService_1.name);
     }
+    normalizeAttendanceDate(date) {
+        const attendanceDate = new Date(date);
+        if (Number.isNaN(attendanceDate.getTime())) {
+            throw new common_1.BadRequestException('Invalid attendance date');
+        }
+        attendanceDate.setHours(0, 0, 0, 0);
+        return attendanceDate;
+    }
+    async resolveLearnerAttendanceRecord(attendanceId, date) {
+        if (!attendanceId.startsWith('absent-')) {
+            const attendance = await this.prisma.learnerAttendance.findUnique({
+                where: { id: attendanceId },
+                include: {
+                    learner: {
+                        include: { referential: true },
+                    },
+                },
+            });
+            if (!attendance) {
+                throw new common_1.NotFoundException('Attendance record not found');
+            }
+            return attendance;
+        }
+        if (!date) {
+            throw new common_1.BadRequestException('A date is required to update a generated absence record');
+        }
+        const learnerId = attendanceId.replace('absent-', '');
+        const attendanceDate = this.normalizeAttendanceDate(date);
+        const existingAttendance = await this.prisma.learnerAttendance.findFirst({
+            where: {
+                learnerId,
+                date: attendanceDate,
+            },
+            include: {
+                learner: {
+                    include: { referential: true },
+                },
+            },
+        });
+        if (existingAttendance) {
+            return existingAttendance;
+        }
+        return this.prisma.learnerAttendance.create({
+            data: {
+                learnerId,
+                date: attendanceDate,
+                isPresent: false,
+                isLate: false,
+                status: client_1.AbsenceStatus.TO_JUSTIFY,
+                scanTime: null,
+            },
+            include: {
+                learner: {
+                    include: { referential: true },
+                },
+            },
+        });
+    }
     isWithinScanTime(scanTime) {
         const cutoffTime = new Date(scanTime.getFullYear(), scanTime.getMonth(), scanTime.getDate(), 8, 15);
         return scanTime <= cutoffTime;
@@ -263,14 +321,8 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         await this.notificationsService.createJustificationNotification(attendanceId, attendance.learnerId, `${attendance.learner.firstName} ${attendance.learner.lastName} a soumis une justification ${attendance.isLate ? 'de retard' : 'd\'absence'}`);
         return attendance;
     }
-    async updateAbsenceStatus(attendanceId, status, comment) {
-        const attendance = await this.prisma.learnerAttendance.findUnique({
-            where: { id: attendanceId },
-            include: { learner: true }
-        });
-        if (!attendance) {
-            throw new common_1.NotFoundException('Attendance record not found');
-        }
+    async updateAbsenceStatus(attendanceId, status, comment, date) {
+        const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
         if (attendance.status === client_1.AbsenceStatus.APPROVED && status === client_1.AbsenceStatus.APPROVED) {
             throw new common_1.BadRequestException('This justification is already approved');
         }
@@ -278,7 +330,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             throw new common_1.BadRequestException('No justification has been submitted for this absence/tardiness');
         }
         const updatedAttendance = await this.prisma.learnerAttendance.update({
-            where: { id: attendanceId },
+            where: { id: attendance.id },
             data: {
                 status,
                 justificationComment: comment
@@ -293,16 +345,10 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         });
         return updatedAttendance;
     }
-    async forceApprove(attendanceId) {
-        const attendance = await this.prisma.learnerAttendance.findUnique({
-            where: { id: attendanceId },
-            include: { learner: true },
-        });
-        if (!attendance) {
-            throw new common_1.NotFoundException('Attendance record not found');
-        }
+    async forceApprove(attendanceId, date) {
+        const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
         const updated = await this.prisma.learnerAttendance.update({
-            where: { id: attendanceId },
+            where: { id: attendance.id },
             data: {
                 status: client_1.AbsenceStatus.APPROVED,
                 justificationComment: 'Autorisé par l\'administrateur',
@@ -826,9 +872,25 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             }
         });
     }
-    async updateAttendanceStatus(id, status) {
+    async updateAttendanceStatus(id, status, date) {
         const isPresent = status !== 'absent';
         const isLate = status === 'late';
+        if (id.startsWith('absent-')) {
+            const attendance = await this.resolveLearnerAttendanceRecord(id, date);
+            return this.prisma.learnerAttendance.update({
+                where: { id: attendance.id },
+                data: {
+                    isPresent,
+                    isLate,
+                    status: isPresent ? 'APPROVED' : 'TO_JUSTIFY',
+                },
+                include: {
+                    learner: {
+                        include: { referential: true },
+                    },
+                },
+            });
+        }
         return this.prisma.learnerAttendance.update({
             where: { id },
             data: {
@@ -838,9 +900,9 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             },
             include: {
                 learner: {
-                    include: { referential: true }
-                }
-            }
+                    include: { referential: true },
+                },
+            },
         });
     }
 };

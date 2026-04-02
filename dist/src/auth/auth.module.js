@@ -16,6 +16,7 @@ const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const local_strategy_1 = require("./strategies/local.strategy");
 const users_module_1 = require("../users/users.module");
 const email_module_1 = require("../email/email.module");
+const jwt_secret_1 = require("./jwt-secret");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -27,7 +28,7 @@ exports.AuthModule = AuthModule = __decorate([
             email_module_1.EmailModule,
             jwt_1.JwtModule.registerAsync({
                 useFactory: () => ({
-                    secret: process.env.JWT_SECRET,
+                    secret: (0, jwt_secret_1.getJwtSecret)(),
                     signOptions: { expiresIn: '1d' },
                 }),
             }),

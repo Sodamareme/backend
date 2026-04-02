@@ -2,6 +2,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Module } from '@prisma/client';
 import { CreateModuleDto } from './dto/create-module.dto';
+import { UpdateModuleDto } from './dto/update-module.dto';
 export declare class ModulesService {
     private readonly prisma;
     private readonly cloudinary;
@@ -10,7 +11,7 @@ export declare class ModulesService {
     create(data: CreateModuleDto, photoFile?: Express.Multer.File): Promise<Module>;
     findAll(page?: number, limit?: number): Promise<Module[]>;
     findOne(id: string): Promise<Module>;
-    update(id: string, data: Partial<Module>): Promise<Module>;
+    update(id: string, data: UpdateModuleDto): Promise<Module>;
     addGrade(data: {
         moduleId: string;
         learnerId: string;
@@ -27,11 +28,11 @@ export declare class ModulesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
-    updateGrade(gradeId: string, data: {
+    updateGrade(moduleId: string, gradeId: string, data: {
         value: number;
         comment?: string;
     }): Promise<{
@@ -45,8 +46,8 @@ export declare class ModulesService {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
     getActiveModules(): Promise<Module[]>;

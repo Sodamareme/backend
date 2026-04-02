@@ -18,12 +18,17 @@ import { ReferentialsService } from './referentials.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorators';
 import { UserRole } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreateReferentialDto } from './dto/create-referential.dto';
 
 @ApiTags('referentials')
 @Controller('referentials')
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth()
+
 export class ReferentialsController {
   private readonly logger = new Logger(ReferentialsController.name);
 
@@ -33,9 +38,13 @@ export class ReferentialsController {
   ) {}
 
   @Post()
+
+  @Roles(UserRole.ADMIN)
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
+
   @ApiOperation({ summary: 'Create a new referential' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Referential created' })
   @ApiConsumes('multipart/form-data')
@@ -83,9 +92,7 @@ export class ReferentialsController {
   }
 
   @Post('assign-to-promotion')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Assign referentials to a promotion' })
   async assignToPromotion(
     @Body() data: { referentialIds: string[]; promotionId: string }
@@ -97,18 +104,25 @@ export class ReferentialsController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Récupérer tous les référentiels' })
   async findAll() {
     return this.referentialsService.findAll();
   }
 
+
+  @Get("all")
+  @Public()
+
   @Get('all')
+
   @ApiOperation({ summary: 'Récupérer tous les référentiels' })
   async findAllReferentials() {
     return this.referentialsService.findAllReferentials();
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Récupérer un référentiel par ID' })
   async findOne(@Param('id') id: string) {
     return this.referentialsService.findOne(id);
@@ -121,9 +135,7 @@ export class ReferentialsController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Mettre à jour un référentiel' })
   async update(@Param('id') id: string, @Body() data: Partial<CreateReferentialDto>) {
     // Ensure we have at least one valid field to update

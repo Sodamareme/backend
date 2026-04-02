@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var CoachesController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoachesController = void 0;
 const common_1 = require("@nestjs/common");
@@ -21,22 +22,23 @@ const update_coach_dto_1 = require("./dto/update-coach.dto");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
-let CoachesController = class CoachesController {
+let CoachesController = CoachesController_1 = class CoachesController {
     constructor(coachesService) {
         this.coachesService = coachesService;
+        this.logger = new common_1.Logger(CoachesController_1.name);
     }
     getUserId(req) {
         const userId = req.user?.id || req.user?.sub || req.user?.userId;
         if (!userId) {
-            console.error('❌ No userId found in request. User object:', req.user);
+            this.logger.error(`No userId found in request: ${JSON.stringify(req.user)}`);
             throw new common_1.BadRequestException('User ID not found in token');
         }
-        console.log('✅ Extracted userId:', userId);
+        this.logger.debug(`Extracted userId: ${userId}`);
         return userId;
     }
     async getMyProfile(req) {
         const userId = this.getUserId(req);
-        console.log('👤 GET /coaches/me - userId:', userId);
+        this.logger.debug(`GET /coaches/me - userId: ${userId}`);
         const coach = await this.coachesService.findByUserId(userId);
         if (!coach) {
             throw new common_1.NotFoundException('Coach non trouvé');
@@ -45,12 +47,12 @@ let CoachesController = class CoachesController {
     }
     async getMyAttendance(req, startDate, endDate) {
         const userId = this.getUserId(req);
-        console.log('📊 GET /coaches/me/attendance - userId:', userId);
+        this.logger.debug(`GET /coaches/me/attendance - userId: ${userId}`);
         const coach = await this.coachesService.findByUserId(userId);
         if (!coach) {
             throw new common_1.NotFoundException('Coach non trouvé');
         }
-        console.log('✅ Coach found for attendance:', coach.id);
+        this.logger.debug(`Coach found for attendance: ${coach.id}`);
         const end = endDate ? new Date(endDate) : new Date();
         const start = startDate
             ? new Date(startDate)
@@ -59,7 +61,7 @@ let CoachesController = class CoachesController {
     }
     async getMyAttendanceStats(req, month, year) {
         const userId = this.getUserId(req);
-        console.log('📈 GET /coaches/me/attendance/stats - userId:', userId);
+        this.logger.debug(`GET /coaches/me/attendance/stats - userId: ${userId}`);
         const coach = await this.coachesService.findByUserId(userId);
         if (!coach) {
             throw new common_1.NotFoundException('Coach non trouvé');
@@ -67,7 +69,7 @@ let CoachesController = class CoachesController {
         const currentDate = new Date();
         const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
         const targetYear = year ? parseInt(year) : currentDate.getFullYear();
-        console.log('📊 Fetching stats for:', { month: targetMonth, year: targetYear });
+        this.logger.debug(`Fetching stats for month=${targetMonth}, year=${targetYear}`);
         return this.coachesService.getCoachAttendanceStats(coach.id, targetYear, targetMonth);
     }
     async getMyTodayAttendance(req) {
@@ -102,7 +104,7 @@ let CoachesController = class CoachesController {
     }
     async selfCheckIn(req) {
         const userId = this.getUserId(req);
-        console.log('➕ POST /coaches/me/self-checkin - userId:', userId);
+        this.logger.debug(`POST /coaches/me/self-checkin - userId: ${userId}`);
         const coach = await this.coachesService.findByUserId(userId);
         if (!coach) {
             throw new common_1.NotFoundException('Coach non trouvé');
@@ -124,7 +126,7 @@ let CoachesController = class CoachesController {
     }
     async scanAttendance(body) {
         const qrData = body.qrData;
-        console.log('📥 Body reçu:', JSON.stringify(body));
+        this.logger.debug(`Scan attendance body received: ${JSON.stringify(body)}`);
         return await this.coachesService.scanAttendance(qrData);
     }
     async create(createCoachDto, photo) {
@@ -141,7 +143,7 @@ let CoachesController = class CoachesController {
         return await this.coachesService.getCoachAttendanceHistory(coachId, start, end);
     }
     async update(id, updateCoachDto, photo) {
-        console.log('=== UPDATE COACH DTO ===', JSON.stringify(updateCoachDto, null, 2));
+        this.logger.debug(`Update coach payload: ${JSON.stringify(updateCoachDto)}`);
         return await this.coachesService.update(id, updateCoachDto, photo);
     }
     async remove(id) {
@@ -275,7 +277,7 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], CoachesController.prototype, "remove", null);
-exports.CoachesController = CoachesController = __decorate([
+exports.CoachesController = CoachesController = CoachesController_1 = __decorate([
     (0, common_1.Controller)('coaches'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     __metadata("design:paramtypes", [coaches_service_1.CoachesService])

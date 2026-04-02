@@ -1,9 +1,10 @@
-import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Req } from '@nestjs/common';
 import { MealScansService } from './meal-scans.service';
 import { CreateMealScanDto } from './dto/CreateMealScanDto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Request } from 'express';
 
 @Controller('meal-scans')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -13,8 +14,9 @@ export class MealScansController {
   // Scan repas par restaurateur
   @Post()
   @Roles('RESTAURATEUR')
-  create(@Body() dto: CreateMealScanDto,@Body() restaurantId: string) {
-    return this.mealScansService.create(dto,restaurantId);
+  create(@Body() dto: CreateMealScanDto, @Req() req: Request & { user?: { id?: string } }) {
+    const userId = req.user?.id;
+    return this.mealScansService.create(dto, userId);
   }
 
   // Voir tous les scans du jour

@@ -21,6 +21,7 @@ const roles_guard_1 = require("../auth/guards/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
 const client_1 = require("@prisma/client");
 const create_module_dto_1 = require("./dto/create-module.dto");
+const update_module_dto_1 = require("./dto/update-module.dto");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
 let ModulesController = class ModulesController {
@@ -30,7 +31,10 @@ let ModulesController = class ModulesController {
     async create(createModuleDto, photoFile) {
         return this.modulesService.create(createModuleDto, photoFile);
     }
-    async findAll() {
+    async findAll(refId) {
+        if (refId) {
+            return this.modulesService.getModulesByReferential(refId);
+        }
         return this.modulesService.findAll();
     }
     async getActiveModules() {
@@ -45,8 +49,8 @@ let ModulesController = class ModulesController {
     async getGradesByModule(id) {
         return this.modulesService.getGradesByModule(id);
     }
-    async update(id, data) {
-        return this.modulesService.update(id, data);
+    async update(id, updateModuleDto) {
+        return this.modulesService.update(id, updateModuleDto);
     }
     async addGrade(moduleId, data) {
         return this.modulesService.addGrade({
@@ -54,8 +58,8 @@ let ModulesController = class ModulesController {
             ...data,
         });
     }
-    async updateGrade(gradeId, data) {
-        return this.modulesService.updateGrade(gradeId, data);
+    async updateGrade(moduleId, gradeId, data) {
+        return this.modulesService.updateGrade(moduleId, gradeId, data);
     }
 };
 exports.ModulesController = ModulesController;
@@ -90,8 +94,9 @@ __decorate([
 __decorate([
     (0, common_1.Get)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer tous les modules' }),
+    __param(0, (0, common_1.Query)('refId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], ModulesController.prototype, "findAll", null);
 __decorate([
@@ -131,10 +136,15 @@ __decorate([
     (0, common_1.Put)(':id'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.COACH),
     (0, swagger_1.ApiOperation)({ summary: 'Mettre à jour un module' }),
-    __param(0, (0, common_1.Param)('id')),
+    (0, swagger_1.ApiBody)({ type: update_module_dto_1.UpdateModuleDto }),
+    (0, swagger_1.ApiResponse)({
+        status: common_1.HttpStatus.OK,
+        description: 'Module updated successfully',
+    }),
+    __param(0, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, update_module_dto_1.UpdateModuleDto]),
     __metadata("design:returntype", Promise)
 ], ModulesController.prototype, "update", null);
 __decorate([
@@ -148,13 +158,14 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ModulesController.prototype, "addGrade", null);
 __decorate([
-    (0, common_1.Put)('grades/:gradeId'),
+    (0, common_1.Put)(':moduleId/grades/:gradeId'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.COACH),
     (0, swagger_1.ApiOperation)({ summary: 'Mettre à jour une note' }),
-    __param(0, (0, common_1.Param)('gradeId')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, common_1.Param)('moduleId')),
+    __param(1, (0, common_1.Param)('gradeId')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], ModulesController.prototype, "updateGrade", null);
 exports.ModulesController = ModulesController = __decorate([

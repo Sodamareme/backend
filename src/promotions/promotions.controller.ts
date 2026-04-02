@@ -21,6 +21,7 @@ import { PromotionsService } from './promotions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorators';
 import { Promotion, PromotionStatus, UserRole } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
@@ -63,12 +64,14 @@ export class PromotionsController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Récupérer toutes les promotions' })
   async findAll() {
     return this.promotionsService.findAll();
   }
 
   @Get('active')
+  @Public()
   @ApiOperation({ summary: 'Récupérer la promotion active' })
   async getActivePromotion() {
     return this.promotionsService.getActivePromotion();

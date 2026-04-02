@@ -7,8 +7,8 @@ export declare class MealsController {
         createdAt: Date;
         updatedAt: Date;
         type: string;
-        learnerId: string;
         date: Date;
+        learnerId: string;
     }>;
     getDailyStats(): Promise<{
         date: Date;
@@ -47,8 +47,8 @@ export declare class MealsController {
         createdAt: Date;
         updatedAt: Date;
         type: string;
-        learnerId: string;
         date: Date;
+        learnerId: string;
     })[]>;
     getLatestScans(): Promise<({
         learner: {
@@ -98,7 +98,7 @@ export declare class MealsController {
         createdAt: Date;
         updatedAt: Date;
         type: string;
-        learnerId: string;
         date: Date;
+        learnerId: string;
     })[]>;
 }
