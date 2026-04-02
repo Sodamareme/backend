@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Param, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Query, Req } from '@nestjs/common';
 import { MealScansService } from './meal-scans.service';
 import { CreateMealScanDto } from './dto/CreateMealScanDto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -24,6 +24,12 @@ export class MealScansController {
   @Roles('ADMIN', 'RESTAURATEUR')
   findToday() {
     return this.mealScansService.findToday();
+  }
+
+  @Get('history')
+  @Roles('ADMIN', 'RESTAURATEUR')
+  findHistory(@Query('date') date?: string) {
+    return this.mealScansService.findHistory(date);
   }
 
   // Voir tous les repas d’un apprenant

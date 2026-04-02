@@ -12,22 +12,36 @@ import { MealType } from '@prisma/client';
 export class MealScansService {
   constructor(private prisma: PrismaService) {}
 
-  private getCurrentMealType(now: Date): MealType {
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const currentTimeInMinutes = hours * 60 + minutes;
+  private readonly mealScanInclude = {
+    learner: {
+      include: {
+        referential: true,
+        promotion: true,
+      },
+    },
+    restaurateur: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+      },
+    },
+  } as const;
 
-    if (currentTimeInMinutes < 6 * 60) {
-      throw new BadRequestException(
-        'Le scan des repas commence a 06:00. Veuillez reessayer plus tard.',
-      );
+  private getDayBounds(date?: string) {
+    const baseDate = date ? new Date(`${date}T00:00:00`) : new Date();
+
+    if (Number.isNaN(baseDate.getTime())) {
+      throw new BadRequestException('Date invalide. Utilisez le format YYYY-MM-DD.');
     }
 
-    if (currentTimeInMinutes < 11 * 60 + 30) {
-      return 'BREAKFAST';
-    }
+    const startOfDay = new Date(baseDate);
+    startOfDay.setHours(0, 0, 0, 0);
 
-    return 'LUNCH';
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    return { startOfDay, endOfDay };
   }
 
   async create(dto: CreateMealScanDto, restaurateurUserId?: string) {
@@ -44,7 +58,7 @@ export class MealScansService {
     }
 
     const scannedAt = new Date();
-    const type = this.getCurrentMealType(scannedAt);
+    const type: MealType = dto.type;
 
     // Vérifier si déjà scanné aujourd'hui
     const startOfDay = new Date(scannedAt);
@@ -83,43 +97,52 @@ export class MealScansService {
   }
 
   async findToday() {
-    const startOfDay = new Date(new Date().setHours(0,0,0,0));
+    const { startOfDay, endOfDay } = this.getDayBounds();
     return this.prisma.mealScan.findMany({
-      where: { scannedAt: { gte: startOfDay } },
-      include: { 
-        learner: {
-          include: {
-            referential: true,
-            promotion: true,
-          },
+      where: {
+        scannedAt: {
+          gte: startOfDay,
+          lt: endOfDay,
         },
-        restaurateur: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          }
-        }
       },
+      include: this.mealScanInclude,
       orderBy: { scannedAt: 'desc' },
     });
   }
 
-  async findByLearner(learnerId: string){
-    return this.prisma.meal.findMany({
+  async findHistory(date?: string) {
+    const { startOfDay, endOfDay } = this.getDayBounds(date);
+    return this.prisma.mealScan.findMany({
       where: {
-        learnerId: learnerId
-      }
-    })
+        scannedAt: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+      include: this.mealScanInclude,
+      orderBy: { scannedAt: 'desc' },
+    });
   }
 
-  async findByMatricule(learnerMatricule: string){
-    return this.prisma.meal.findFirst({
+  async findByLearner(learnerId: string) {
+    return this.prisma.mealScan.findMany({
+      where: {
+        learnerId,
+      },
+      include: this.mealScanInclude,
+      orderBy: { scannedAt: 'desc' },
+    });
+  }
+
+  async findByMatricule(learnerMatricule: string) {
+    return this.prisma.mealScan.findMany({
       where: {
         learner: {
-          matricule: learnerMatricule
-        }
-      }
-    })
+          matricule: learnerMatricule,
+        },
+      },
+      include: this.mealScanInclude,
+      orderBy: { scannedAt: 'desc' },
+    });
   }
 }
