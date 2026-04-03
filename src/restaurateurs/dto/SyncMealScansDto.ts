@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -35,6 +36,18 @@ export class SyncMealScanItemDto {
   @IsOptional()
   @IsString()
   clientScanId?: string;
+
+  @IsOptional()
+  @IsEnum(MealType)
+  detectedType?: MealType;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  manualOverrideConfirmed?: boolean;
 }
 
 export class SyncMealScansDto {
