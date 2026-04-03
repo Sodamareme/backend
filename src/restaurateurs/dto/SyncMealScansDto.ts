@@ -25,9 +25,16 @@ export class SyncMealScanItemDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   serviceDate?: string;
 
-  @IsOptional()
   @IsDateString()
-  scannedAtClient?: string;
+  scannedAtClient: string;
+
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+
+  @IsOptional()
+  @IsString()
+  clientScanId?: string;
 }
 
 export class SyncMealScansDto {

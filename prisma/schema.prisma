@@ -379,10 +379,18 @@ model MealScan {
   id             String       @id @default(uuid())
   learnerId      String
   type           MealType
+  serviceDate    DateTime
   scannedAt      DateTime     @default(now())
+  scannedAtClient DateTime?
+  deviceId       String?
+  clientScanId   String?      @unique
   restaurateurId String
   learner        Learner      @relation(fields: [learnerId], references: [id])
   restaurateur   Restaurateur @relation(fields: [restaurateurId], references: [id])
+
+  @@index([serviceDate])
+  @@index([deviceId])
+  @@index([learnerId, type, serviceDate])
 }
 
 

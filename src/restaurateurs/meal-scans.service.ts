@@ -6,8 +6,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMealScanDto } from './dto/CreateMealScanDto';
-import { MealType } from '@prisma/client';
+import { MealType, Prisma } from '@prisma/client';
 import { SyncMealScanItemDto, SyncMealScansDto } from './dto/SyncMealScansDto';
+import { randomUUID } from 'crypto';
 
 type SyncMealScanResult = {
   localId: string;
@@ -16,9 +17,17 @@ type SyncMealScanResult = {
   serverId?: string;
 };
 
+type MealScanTimeInput = {
+  serviceDate?: string;
+  scannedAtClient?: string;
+};
+
 @Injectable()
 export class MealScansService {
   constructor(private prisma: PrismaService) {}
+
+  private static readonly BREAKFAST_START_MINUTES = 6 * 60;
+  private static readonly LUNCH_START_MINUTES = 11 * 60;
 
   private readonly mealScanInclude = {
     learner: {
@@ -77,7 +86,7 @@ export class MealScansService {
     return restaurateur;
   }
 
-  private getScanWindow(scan?: Pick<SyncMealScanItemDto, 'serviceDate' | 'scannedAtClient'>) {
+  private getScanWindow(scan?: MealScanTimeInput) {
     if (scan?.serviceDate) {
       return this.getDayBounds(scan.serviceDate);
     }
@@ -95,7 +104,7 @@ export class MealScansService {
     return this.getDayBounds();
   }
 
-  private getScannedAt(scan?: Pick<SyncMealScanItemDto, 'scannedAtClient'>) {
+  private getScannedAt(scan?: Pick<MealScanTimeInput, 'scannedAtClient'>) {
     if (!scan?.scannedAtClient) {
       return new Date();
     }
@@ -107,6 +116,47 @@ export class MealScansService {
     }
 
     return scannedAtClient;
+  }
+
+  private getClientScanId(scan: {
+    clientScanId?: string;
+    localId?: string;
+    deviceId?: string;
+  }) {
+    if (scan.clientScanId) {
+      return scan.clientScanId;
+    }
+
+    if (!scan.localId) {
+      return null;
+    }
+
+    return scan.deviceId ? `${scan.deviceId}:${scan.localId}` : scan.localId;
+  }
+
+  private validateMealWindow(type: MealType, scannedAt: Date) {
+    const currentTimeInMinutes = scannedAt.getHours() * 60 + scannedAt.getMinutes();
+
+    if (type === 'BREAKFAST') {
+      if (
+        currentTimeInMinutes < MealScansService.BREAKFAST_START_MINUTES ||
+        currentTimeInMinutes >= MealScansService.LUNCH_START_MINUTES
+      ) {
+        throw new BadRequestException(
+          'Le petit dejeuner est disponible uniquement entre 06:00 et 11:00.',
+        );
+      }
+      return;
+    }
+
+    if (currentTimeInMinutes < MealScansService.LUNCH_START_MINUTES) {
+      throw new BadRequestException('Le dejeuner commence a 11:00.');
+    }
+  }
+
+  private getServiceDate(scan?: MealScanTimeInput) {
+    const { startOfDay } = this.getScanWindow(scan);
+    return startOfDay;
   }
 
   private getExceptionMessage(error: BadRequestException | ConflictException | NotFoundException) {
@@ -135,6 +185,9 @@ export class MealScansService {
       type: MealType;
       serviceDate?: string;
       scannedAtClient?: string;
+      deviceId?: string;
+      clientScanId?: string;
+      localId?: string;
     },
     restaurateurId: string,
   ) {
@@ -148,7 +201,32 @@ export class MealScansService {
     }
 
     const scannedAt = this.getScannedAt(scan);
+    const serviceDate = this.getServiceDate(scan);
+    const clientScanId = this.getClientScanId(scan);
     const { startOfDay, endOfDay } = this.getScanWindow(scan);
+
+    this.validateMealWindow(scan.type, scannedAt);
+
+    if (clientScanId) {
+      const existingClientScanRows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "MealScan"
+        WHERE "clientScanId" = ${clientScanId}
+        LIMIT 1
+      `);
+
+      const existingClientScanId = existingClientScanRows[0]?.id;
+      const existingClientScan = existingClientScanId
+        ? await this.prisma.mealScan.findUnique({
+            where: { id: existingClientScanId },
+            include: this.mealScanInclude,
+          })
+        : null;
+
+      if (existingClientScan) {
+        return existingClientScan;
+      }
+    }
 
     const existing = await this.prisma.mealScan.findFirst({
       where: {
@@ -167,13 +245,35 @@ export class MealScansService {
       );
     }
 
-    return this.prisma.mealScan.create({
-      data: {
-        learnerId: scan.learnerId,
-        type: scan.type,
-        scannedAt,
-        restaurateurId,
-      },
+    const mealScanId = randomUUID();
+
+    await this.prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "MealScan" (
+        "id",
+        "learnerId",
+        "type",
+        "serviceDate",
+        "scannedAt",
+        "scannedAtClient",
+        "deviceId",
+        "clientScanId",
+        "restaurateurId"
+      )
+      VALUES (
+        ${mealScanId},
+        ${scan.learnerId},
+        ${scan.type}::"MealType",
+        ${serviceDate},
+        ${scannedAt},
+        ${scan.scannedAtClient ? scannedAt : null},
+        ${scan.deviceId ?? null},
+        ${clientScanId ?? null},
+        ${restaurateurId}
+      )
+    `);
+
+    return this.prisma.mealScan.findUniqueOrThrow({
+      where: { id: mealScanId },
       include: this.mealScanInclude,
     });
   }
@@ -185,6 +285,10 @@ export class MealScansService {
       {
         learnerId: dto.learnerId,
         type: dto.type,
+        serviceDate: dto.serviceDate,
+        scannedAtClient: dto.scannedAtClient,
+        deviceId: dto.deviceId,
+        clientScanId: dto.clientScanId,
       },
       restaurateur.id,
     );
