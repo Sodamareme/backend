@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMealScanDto } from './dto/CreateMealScanDto';
 import { MealType, Prisma } from '@prisma/client';
-import { SyncMealScanItemDto, SyncMealScansDto } from './dto/SyncMealScansDto';
+import { SyncMealScansDto } from './dto/SyncMealScansDto';
 import { randomUUID } from 'crypto';
 
 type SyncMealScanResult = {
@@ -20,12 +20,33 @@ type SyncMealScanResult = {
 type MealScanTimeInput = {
   serviceDate?: string;
   scannedAtClient?: string;
+  timezone?: string;
+};
+
+type MealScanCreateInput = MealScanTimeInput & {
+  learnerId: string;
+  type: MealType;
+  detectedType?: MealType;
+  deviceId?: string;
+  clientScanId?: string;
+  localId?: string;
+  manualOverrideConfirmed?: boolean;
+};
+
+type ZonedDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
 };
 
 @Injectable()
 export class MealScansService {
   constructor(private prisma: PrismaService) {}
 
+  private static readonly DEFAULT_TIMEZONE = 'Africa/Dakar';
   private static readonly BREAKFAST_START_MINUTES = 6 * 60;
   private static readonly LUNCH_START_MINUTES = 11 * 60;
 
@@ -45,22 +66,28 @@ export class MealScansService {
     },
   } as const;
 
-  private getDayBounds(date?: string) {
-    const baseDate = date ? new Date(`${date}T00:00:00`) : new Date();
+  private getDayBounds(date?: string, timezone?: string) {
+    const resolvedTimeZone = this.getTimezoneOrDefault(timezone);
+    const dayDate = date
+      ? this.createDateAtTimeZoneMidnight(date, resolvedTimeZone)
+      : new Date();
 
-    return this.getDayBoundsFromBaseDate(baseDate);
+    return this.getDayBoundsFromBaseDate(dayDate, resolvedTimeZone);
   }
 
-  private getDayBoundsFromBaseDate(baseDate: Date) {
+  private getDayBoundsFromBaseDate(baseDate: Date, timezone?: string) {
     if (Number.isNaN(baseDate.getTime())) {
       throw new BadRequestException('Date invalide. Utilisez le format YYYY-MM-DD.');
     }
 
-    const startOfDay = new Date(baseDate);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    const resolvedTimeZone = this.getTimezoneOrDefault(timezone);
+    const dateParts = this.getZonedDateParts(baseDate, resolvedTimeZone);
+    const startOfDay = this.createDateAtTimeZoneMidnight(
+      this.formatDateParts(dateParts),
+      resolvedTimeZone,
+    );
+    const endParts = this.addOneDay(dateParts);
+    const endOfDay = this.createDateAtTimeZoneMidnight(this.formatDateParts(endParts), resolvedTimeZone);
 
     return { startOfDay, endOfDay };
   }
@@ -87,8 +114,10 @@ export class MealScansService {
   }
 
   private getScanWindow(scan?: MealScanTimeInput) {
+    const resolvedTimeZone = this.getTimezoneOrDefault(scan?.timezone);
+
     if (scan?.serviceDate) {
-      return this.getDayBounds(scan.serviceDate);
+      return this.getDayBounds(scan.serviceDate, resolvedTimeZone);
     }
 
     if (scan?.scannedAtClient) {
@@ -98,10 +127,10 @@ export class MealScansService {
         throw new BadRequestException('scannedAtClient invalide.');
       }
 
-      return this.getDayBoundsFromBaseDate(scannedAtClient);
+      return this.getDayBoundsFromBaseDate(scannedAtClient, resolvedTimeZone);
     }
 
-    return this.getDayBounds();
+    return this.getDayBounds(undefined, resolvedTimeZone);
   }
 
   private getScannedAt(scan?: Pick<MealScanTimeInput, 'scannedAtClient'>) {
@@ -134,29 +163,146 @@ export class MealScansService {
     return scan.deviceId ? `${scan.deviceId}:${scan.localId}` : scan.localId;
   }
 
-  private validateMealWindow(type: MealType, scannedAt: Date) {
-    const currentTimeInMinutes = scannedAt.getHours() * 60 + scannedAt.getMinutes();
+  private getTimezoneOrDefault(timezone?: string) {
+    const resolvedTimeZone = timezone?.trim() || MealScansService.DEFAULT_TIMEZONE;
 
-    if (type === 'BREAKFAST') {
-      if (
-        currentTimeInMinutes < MealScansService.BREAKFAST_START_MINUTES ||
-        currentTimeInMinutes >= MealScansService.LUNCH_START_MINUTES
-      ) {
-        throw new BadRequestException(
-          'Le petit dejeuner est disponible uniquement entre 06:00 et 11:00.',
-        );
-      }
-      return;
-    }
-
-    if (currentTimeInMinutes < MealScansService.LUNCH_START_MINUTES) {
-      throw new BadRequestException('Le dejeuner commence a 11:00.');
+    try {
+      Intl.DateTimeFormat('en-US', { timeZone: resolvedTimeZone }).format(new Date());
+      return resolvedTimeZone;
+    } catch {
+      throw new BadRequestException('timezone invalide.');
     }
   }
 
   private getServiceDate(scan?: MealScanTimeInput) {
     const { startOfDay } = this.getScanWindow(scan);
     return startOfDay;
+  }
+
+  private getZonedDateParts(date: Date, timezone: string): ZonedDateParts {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+
+    const values = formatter.formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== 'literal') {
+        acc[part.type] = part.value;
+      }
+      return acc;
+    }, {});
+
+    return {
+      year: Number(values.year),
+      month: Number(values.month),
+      day: Number(values.day),
+      hour: Number(values.hour),
+      minute: Number(values.minute),
+      second: Number(values.second),
+    };
+  }
+
+  private getTimezoneOffsetMinutes(date: Date, timezone: string) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+    });
+    const timezoneName = formatter
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value;
+
+    if (!timezoneName || timezoneName === 'GMT') {
+      return 0;
+    }
+
+    const match = timezoneName.match(/^GMT([+-])(\d{1,2})(?::(\d{2}))?$/);
+    if (!match) {
+      throw new BadRequestException('Impossible de calculer le fuseau horaire.');
+    }
+
+    const [, sign, hours, minutes = '00'] = match;
+    const totalMinutes = Number(hours) * 60 + Number(minutes);
+    return sign === '-' ? -totalMinutes : totalMinutes;
+  }
+
+  private createDateAtTimeZoneMidnight(date: string, timezone: string) {
+    const [year, month, day] = date.split('-').map(Number);
+    if (!year || !month || !day) {
+      throw new BadRequestException('Date invalide. Utilisez le format YYYY-MM-DD.');
+    }
+
+    return this.createUtcDateFromZonedParts({ year, month, day, hour: 0, minute: 0, second: 0 }, timezone);
+  }
+
+  private createUtcDateFromZonedParts(parts: ZonedDateParts, timezone: string) {
+    const approximateUtcDate = new Date(
+      Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, 0),
+    );
+    const initialOffset = this.getTimezoneOffsetMinutes(approximateUtcDate, timezone);
+    const shiftedDate = new Date(approximateUtcDate.getTime() - initialOffset * 60_000);
+    const resolvedOffset = this.getTimezoneOffsetMinutes(shiftedDate, timezone);
+
+    if (resolvedOffset === initialOffset) {
+      return shiftedDate;
+    }
+
+    return new Date(approximateUtcDate.getTime() - resolvedOffset * 60_000);
+  }
+
+  private formatDateParts(parts: Pick<ZonedDateParts, 'year' | 'month' | 'day'>) {
+    return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(
+      parts.day,
+    ).padStart(2, '0')}`;
+  }
+
+  private addOneDay(parts: Pick<ZonedDateParts, 'year' | 'month' | 'day'>) {
+    const nextDay = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+
+    return {
+      year: nextDay.getUTCFullYear(),
+      month: nextDay.getUTCMonth() + 1,
+      day: nextDay.getUTCDate(),
+    };
+  }
+
+  private getDetectedMealType(scannedAt: Date, timezone: string) {
+    const { hour, minute } = this.getZonedDateParts(scannedAt, timezone);
+    const currentTimeInMinutes = hour * 60 + minute;
+
+    if (currentTimeInMinutes < MealScansService.BREAKFAST_START_MINUTES) {
+      return null;
+    }
+
+    if (currentTimeInMinutes < MealScansService.LUNCH_START_MINUTES) {
+      return 'BREAKFAST' as const;
+    }
+
+    return 'LUNCH' as const;
+  }
+
+  private validateMealWindow(scan: Pick<MealScanCreateInput, 'type' | 'detectedType' | 'manualOverrideConfirmed'>, scannedAt: Date, timezone: string) {
+    const detectedType = this.getDetectedMealType(scannedAt, timezone);
+
+    if (!detectedType) {
+      throw new BadRequestException("Le scan n'est pas autorise entre 00h et 06h.");
+    }
+
+    if (scan.detectedType && scan.detectedType !== detectedType) {
+      throw new BadRequestException("Le type detecte ne correspond pas a l'horaire serveur.");
+    }
+
+    if (scan.type !== detectedType && !scan.manualOverrideConfirmed) {
+      throw new BadRequestException(
+        "Attention, ce choix ne correspond pas a l'horaire habituel. Confirmation requise.",
+      );
+    }
   }
 
   private getExceptionMessage(error: BadRequestException | ConflictException | NotFoundException) {
@@ -179,18 +325,7 @@ export class MealScansService {
     return error.message;
   }
 
-  private async createMealScan(
-    scan: {
-      learnerId: string;
-      type: MealType;
-      serviceDate?: string;
-      scannedAtClient?: string;
-      deviceId?: string;
-      clientScanId?: string;
-      localId?: string;
-    },
-    restaurateurId: string,
-  ) {
+  private async createMealScan(scan: MealScanCreateInput, restaurateurId: string) {
     const learner = await this.prisma.learner.findUnique({
       where: { id: scan.learnerId },
       select: { id: true },
@@ -204,8 +339,9 @@ export class MealScansService {
     const serviceDate = this.getServiceDate(scan);
     const clientScanId = this.getClientScanId(scan);
     const { startOfDay, endOfDay } = this.getScanWindow(scan);
+    const timezone = this.getTimezoneOrDefault(scan.timezone);
 
-    this.validateMealWindow(scan.type, scannedAt);
+    this.validateMealWindow(scan, scannedAt, timezone);
 
     if (clientScanId) {
       const existingClientScanRows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -289,6 +425,9 @@ export class MealScansService {
         scannedAtClient: dto.scannedAtClient,
         deviceId: dto.deviceId,
         clientScanId: dto.clientScanId,
+        detectedType: dto.detectedType,
+        timezone: dto.timezone,
+        manualOverrideConfirmed: dto.manualOverrideConfirmed,
       },
       restaurateur.id,
     );

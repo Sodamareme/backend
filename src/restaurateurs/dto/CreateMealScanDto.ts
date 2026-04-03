@@ -1,5 +1,12 @@
 // dto/CreateMealScanDto.ts
-import { IsString, IsEnum, IsOptional, IsDateString, Matches } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsDateString,
+  Matches,
+  IsBoolean,
+} from 'class-validator';
 import { MealType } from '@prisma/client';
 
 export class CreateMealScanDto {
@@ -24,4 +31,16 @@ export class CreateMealScanDto {
   @IsOptional()
   @IsString()
   clientScanId?: string;
+
+  @IsOptional()
+  @IsEnum(MealType)
+  detectedType?: MealType;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  manualOverrideConfirmed?: boolean;
 }
