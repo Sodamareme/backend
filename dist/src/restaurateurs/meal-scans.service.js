@@ -16,26 +16,56 @@ let MealScansService = class MealScansService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async create(dto, restaurateurId) {
-        const startOfDay = new Date(new Date().setHours(0, 0, 0, 0));
+    getCurrentMealType(now) {
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const currentTimeInMinutes = hours * 60 + minutes;
+        if (currentTimeInMinutes < 6 * 60) {
+            throw new common_1.BadRequestException('Le scan des repas commence a 06:00. Veuillez reessayer plus tard.');
+        }
+        if (currentTimeInMinutes < 11 * 60 + 30) {
+            return 'BREAKFAST';
+        }
+        return 'LUNCH';
+    }
+    async create(dto, restaurateurUserId) {
+        if (!restaurateurUserId) {
+            throw new common_1.BadRequestException('Utilisateur restaurateur introuvable dans le token.');
+        }
+        const restaurateur = await this.prisma.restaurateur.findUnique({
+            where: { userId: restaurateurUserId },
+        });
+        if (!restaurateur) {
+            throw new common_1.NotFoundException('Profil restaurateur introuvable.');
+        }
+        const scannedAt = new Date();
+        const type = this.getCurrentMealType(scannedAt);
+        const startOfDay = new Date(scannedAt);
+        startOfDay.setHours(0, 0, 0, 0);
         const existing = await this.prisma.mealScan.findFirst({
             where: {
                 learnerId: dto.learnerId,
-                type: dto.type,
+                type,
                 scannedAt: { gte: startOfDay },
             },
         });
         if (existing) {
-            throw new common_1.ConflictException(`L'apprenant a déjà pris le ${dto.type === 'BREAKFAST' ? 'petit déjeuner' : 'déjeuner'} aujourd'hui.`);
+            throw new common_1.ConflictException(`L'apprenant a deja pris le ${type === 'BREAKFAST' ? 'petit dejeuner' : 'dejeuner'} aujourd'hui.`);
         }
         return this.prisma.mealScan.create({
             data: {
                 learnerId: dto.learnerId,
-                type: dto.type,
-                restaurateurId,
+                type,
+                scannedAt,
+                restaurateurId: restaurateur.id,
             },
             include: {
-                learner: true,
+                learner: {
+                    include: {
+                        referential: true,
+                        promotion: true,
+                    },
+                },
                 restaurateur: true,
             },
         });
@@ -46,13 +76,10 @@ let MealScansService = class MealScansService {
             where: { scannedAt: { gte: startOfDay } },
             include: {
                 learner: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        matricule: true,
-                        photoUrl: true,
-                    }
+                    include: {
+                        referential: true,
+                        promotion: true,
+                    },
                 },
                 restaurateur: {
                     select: {

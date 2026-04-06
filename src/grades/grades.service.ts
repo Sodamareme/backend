@@ -5,6 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 
+type GradeUpdateData = Pick<Prisma.GradeUncheckedUpdateInput, 'value' | 'comment'>;
+
 @Injectable()
 export class GradesService {
   private readonly logger = new Logger(GradesService.name);
@@ -169,7 +171,7 @@ export class GradesService {
         throw new NotFoundException('Note non trouvée');
       }
 
-      const data: Prisma.GradeUpdateInput = {};
+      const data: GradeUpdateData = {};
 
       if (updateGradeDto.value !== undefined) {
         data.value = updateGradeDto.value;

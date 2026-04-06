@@ -3,34 +3,35 @@ import { CreateCoachDto } from './dto/create-coach.dto';
 import { UpdateCoachDto } from './dto/update-coach.dto';
 export declare class CoachesController {
     private readonly coachesService;
+    private readonly logger;
     constructor(coachesService: CoachesService);
     private getUserId;
     getMyProfile(req: any): Promise<{
-        referentials: {
-            id: string;
-            photoUrl: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
-            description: string | null;
-            capacity: number;
-            numberOfSessions: number;
-            sessionLength: number | null;
-        }[];
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
+        referentials: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            photoUrl: string | null;
+            description: string | null;
+            capacity: number;
+            numberOfSessions: number;
+            sessionLength: number | null;
+        }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
     }>;
@@ -106,31 +107,31 @@ export declare class CoachesController {
         isLate?: undefined;
     }>;
     findAll(): Promise<({
-        referentials: {
-            id: string;
-            photoUrl: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
-            description: string | null;
-            capacity: number;
-            numberOfSessions: number;
-            sessionLength: number | null;
-        }[];
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
+        referentials: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            photoUrl: string | null;
+            description: string | null;
+            capacity: number;
+            numberOfSessions: number;
+            sessionLength: number | null;
+        }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
     })[]>;
@@ -181,67 +182,67 @@ export declare class CoachesController {
         isLate?: undefined;
     }>;
     create(createCoachDto: CreateCoachDto, photo?: Express.Multer.File): Promise<{
+        user: {
+            id: string;
+            email: string;
+            role: import(".prisma/client").$Enums.UserRole;
+        };
         referentials: {
             id: string;
             name: string;
             description: string;
         }[];
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        firstName: string;
+        lastName: string;
+        phone: string | null;
+        userId: string;
+        photoUrl: string | null;
+        matricule: string;
+        qrCode: string | null;
+    }>;
+    findOne(id: string): Promise<{
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
-    } & {
-        id: string;
-        firstName: string;
-        lastName: string;
-        phone: string | null;
-        photoUrl: string | null;
-        userId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        matricule: string;
-        qrCode: string | null;
-    }>;
-    findOne(id: string): Promise<{
         referentials: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
             description: string | null;
             capacity: number;
             numberOfSessions: number;
             sessionLength: number | null;
         }[];
-        user: {
-            id: string;
-            email: string;
-            role: import(".prisma/client").$Enums.UserRole;
-        };
         modules: {
             id: string;
-            photoUrl: string | null;
             createdAt: Date;
             updatedAt: Date;
             name: string;
+            photoUrl: string | null;
+            refId: string;
+            sessionId: string | null;
             description: string | null;
             startDate: Date;
             endDate: Date;
             coachId: string;
-            refId: string;
-            sessionId: string | null;
         }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
     }>;
@@ -260,31 +261,31 @@ export declare class CoachesController {
         duration: string;
     }[]>;
     update(id: string, updateCoachDto: UpdateCoachDto, photo?: Express.Multer.File): Promise<{
-        referentials: {
-            id: string;
-            photoUrl: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
-            description: string | null;
-            capacity: number;
-            numberOfSessions: number;
-            sessionLength: number | null;
-        }[];
         user: {
             id: string;
             email: string;
             role: import(".prisma/client").$Enums.UserRole;
         };
+        referentials: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            photoUrl: string | null;
+            description: string | null;
+            capacity: number;
+            numberOfSessions: number;
+            sessionLength: number | null;
+        }[];
     } & {
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
         matricule: string;
         qrCode: string | null;
     }>;

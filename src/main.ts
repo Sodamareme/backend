@@ -9,6 +9,11 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  const envOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   // ===============================
   // ✅ CORS PRODUCTION SAFE
   // ===============================
@@ -17,6 +22,7 @@ async function bootstrap() {
     'http://localhost:3001',
     'https://gestionecoleodc.com',
     'https://www.gestionecoleodc.com',
+    ...envOrigins,
   ];
 
   app.enableCors({

@@ -1,7 +1,9 @@
 import { PromotionsService } from './promotions.service';
-import { Promotion, PromotionStatus } from '@prisma/client';
+import { Promotion } from '@prisma/client';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { AddReferentialsDto } from './dto/add-referentials.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 export declare class PromotionsController {
     private readonly promotionsService;
     private readonly logger;
@@ -52,7 +54,7 @@ export declare class PromotionsController {
         activeModules: number;
         upcomingEvents: number;
     }>;
-    update(id: string, data: any): Promise<{
+    update(id: string, updatePromotionDto: UpdatePromotionDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -62,8 +64,6 @@ export declare class PromotionsController {
         startDate: Date;
         endDate: Date;
     }>;
-    updateStatus(id: string, updateStatusDto: {
-        status: PromotionStatus;
-    }): Promise<Promotion>;
+    updateStatus(id: string, updateStatusDto: UpdateStatusDto): Promise<Promotion>;
     addReferentials(id: string, dto: AddReferentialsDto): Promise<Promotion>;
 }

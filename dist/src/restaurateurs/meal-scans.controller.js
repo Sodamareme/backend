@@ -23,8 +23,9 @@ let MealScansController = class MealScansController {
     constructor(mealScansService) {
         this.mealScansService = mealScansService;
     }
-    create(dto, restaurantId) {
-        return this.mealScansService.create(dto, restaurantId);
+    create(dto, req) {
+        const userId = req.user?.id;
+        return this.mealScansService.create(dto, userId);
     }
     findToday() {
         return this.mealScansService.findToday();
@@ -41,9 +42,9 @@ __decorate([
     (0, common_1.Post)(),
     (0, roles_decorator_1.Roles)('RESTAURATEUR'),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [CreateMealScanDto_1.CreateMealScanDto, String]),
+    __metadata("design:paramtypes", [CreateMealScanDto_1.CreateMealScanDto, Object]),
     __metadata("design:returntype", void 0)
 ], MealScansController.prototype, "create", null);
 __decorate([

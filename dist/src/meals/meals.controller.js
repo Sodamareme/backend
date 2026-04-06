@@ -41,7 +41,7 @@ let MealsController = class MealsController {
 exports.MealsController = MealsController;
 __decorate([
     (0, common_1.Post)('scan/:learnerId/:type'),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.RESTAURATEUR),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.RESTAURATEUR, client_1.UserRole.SURVEILLANT),
     (0, swagger_1.ApiOperation)({ summary: 'Scanner un repas pour un apprenant' }),
     (0, swagger_1.ApiResponse)({ status: common_1.HttpStatus.CREATED, description: 'Repas scanné' }),
     __param(0, (0, common_1.Param)('learnerId')),
@@ -52,7 +52,7 @@ __decorate([
 ], MealsController.prototype, "scanMeal", null);
 __decorate([
     (0, common_1.Get)('stats/daily'),
-    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.RESTAURATEUR),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.RESTAURATEUR, client_1.UserRole.SURVEILLANT),
     (0, swagger_1.ApiOperation)({ summary: 'Obtenir les statistiques journalières des repas' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),

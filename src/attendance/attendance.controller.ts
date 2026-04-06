@@ -95,29 +95,30 @@ export class AttendanceController {
   @Roles(UserRole.ADMIN, UserRole.COACH)
   async updateAbsenceStatus(
     @Param('id') id: string,
-    @Body() updateStatusDto: { status: AbsenceStatus; comment?: string }
+    @Body() updateStatusDto: { status: AbsenceStatus; comment?: string; date?: string }
   ) {
     return this.attendanceService.updateAbsenceStatus(
       id,
       updateStatusDto.status,
-      updateStatusDto.comment
+      updateStatusDto.comment,
+      updateStatusDto.date
     );
   }
 
   @Put('absence/:id/force-approve')
   @Roles(UserRole.ADMIN, UserRole.COACH)
   @ApiOperation({ summary: 'Forcer l\'autorisation d\'une absence sans justificatif' })
-  async forceApprove(@Param('id') id: string) {
-    return this.attendanceService.forceApprove(id);
+  async forceApprove(@Param('id') id: string, @Body() body: { date?: string }) {
+    return this.attendanceService.forceApprove(id, body?.date);
   }
 
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.COACH)
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'present' | 'late' | 'absent' }
+    @Body() body: { status: 'present' | 'late' | 'absent'; date?: string }
   ) {
-    return this.attendanceService.updateAttendanceStatus(id, body.status);
+    return this.attendanceService.updateAttendanceStatus(id, body.status, body.date);
   }
 
   // ✅ SURVEILLANT a accès — lecture de l'historique des scans
