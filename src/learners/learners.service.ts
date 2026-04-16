@@ -1025,18 +1025,56 @@ export class LearnersService {
   }
 
   async getAttendanceStats(id: string) {
-    await this.findOne(id);
+    const learner = await this.findOne(id);
 
-    const totalDays = await this.prisma.learnerAttendance.count({
-      where: { learnerId: id },
+    const cohortLearners = await this.prisma.learner.findMany({
+      where: {
+        promotionId: learner.promotionId,
+        ...(learner.refId ? { refId: learner.refId } : {}),
+        status: {
+          in: ['ACTIVE', 'REPLACEMENT'],
+        },
+      },
+      select: {
+        id: true,
+      },
     });
-    const presentDays = await this.prisma.learnerAttendance.count({
-      where: { learnerId: id, isPresent: true },
+
+    const cohortAttendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: {
+        learnerId: {
+          in: cohortLearners.map((cohortLearner) => cohortLearner.id),
+        },
+      },
+      select: {
+        learnerId: true,
+        date: true,
+        isPresent: true,
+      },
     });
+
+    const expectedDays = new Set(
+      cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])
+    );
+
+    const learnerAttendanceRecords = cohortAttendanceRecords.filter(
+      (record) => record.learnerId === id
+    );
+
+    const attendedDays = new Set(
+      learnerAttendanceRecords
+        .filter((record) => record.isPresent)
+        .map((record) => record.date.toISOString().split('T')[0])
+    );
+
+    const totalDays = expectedDays.size;
+    const presentDays = attendedDays.size;
+    const absentDays = Math.max(totalDays - presentDays, 0);
 
     return {
       totalDays,
       presentDays,
+      absentDays,
       attendanceRate: totalDays > 0 ? (presentDays / totalDays) * 100 : 0,
     };
   }
