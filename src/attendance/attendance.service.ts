@@ -829,33 +829,56 @@ async getDailyStats(date: string, referentialId?: string) {
     const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 20) : 5;
     const { startDate, endDate } = this.getAnalyticsDateRange(period);
 
+    const learners = await this.prisma.learner.findMany({
+      where: {
+        status: {
+          in: ['ACTIVE', 'REPLACEMENT'],
+        },
+        ...(params.promotionId ? { promotionId: params.promotionId } : {}),
+        ...(params.referentialId ? { refId: params.referentialId } : {}),
+      },
+      include: {
+        promotion: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        referential: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (learners.length === 0) {
+      return {
+        period,
+        range: {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        },
+        filters: {
+          promotionId: params.promotionId || null,
+          referentialId: params.referentialId || null,
+          limit,
+        },
+        expectedDays: 0,
+        mostAbsent: [],
+        mostLate: [],
+      };
+    }
+
     const attendanceRecords = await this.prisma.learnerAttendance.findMany({
       where: {
         date: {
           gte: startDate,
           lte: endDate,
         },
-        learner: {
-          ...(params.promotionId ? { promotionId: params.promotionId } : {}),
-          ...(params.referentialId ? { refId: params.referentialId } : {}),
-        },
-      },
-      include: {
-        learner: {
-          include: {
-            promotion: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            referential: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
+        learnerId: {
+          in: learners.map((learner) => learner.id),
         },
       },
     });
@@ -872,50 +895,83 @@ async getDailyStats(date: string, referentialId?: string) {
       lateCount: number;
       presentCount: number;
       totalRecords: number;
+      attendedDays: Set<string>;
       attendanceRate: number;
-    }>();
+    }>(
+      learners.map((learner) => [
+        learner.id,
+        {
+          learnerId: learner.id,
+          firstName: learner.firstName,
+          lastName: learner.lastName,
+          matricule: learner.matricule,
+          photoUrl: learner.photoUrl,
+          promotion: learner.promotion
+            ? { id: learner.promotion.id, name: learner.promotion.name }
+            : null,
+          referential: learner.referential
+            ? { id: learner.referential.id, name: learner.referential.name }
+            : null,
+          absenceCount: 0,
+          lateCount: 0,
+          presentCount: 0,
+          totalRecords: 0,
+          attendedDays: new Set<string>(),
+          attendanceRate: 0,
+        },
+      ])
+    );
+
+    const expectedDays = new Set(
+      attendanceRecords.map((record) => record.date.toISOString().split('T')[0])
+    );
 
     attendanceRecords.forEach((record) => {
-      const existingLearner = learnersMap.get(record.learnerId) || {
-        learnerId: record.learnerId,
-        firstName: record.learner.firstName,
-        lastName: record.learner.lastName,
-        matricule: record.learner.matricule,
-        photoUrl: record.learner.photoUrl,
-        promotion: record.learner.promotion
-          ? { id: record.learner.promotion.id, name: record.learner.promotion.name }
-          : null,
-        referential: record.learner.referential
-          ? { id: record.learner.referential.id, name: record.learner.referential.name }
-          : null,
-        absenceCount: 0,
-        lateCount: 0,
-        presentCount: 0,
-        totalRecords: 0,
-        attendanceRate: 0,
-      };
+      const existingLearner = learnersMap.get(record.learnerId);
+      if (!existingLearner) {
+        return;
+      }
 
       existingLearner.totalRecords += 1;
 
-      if (!record.isPresent) {
-        existingLearner.absenceCount += 1;
-      } else if (record.isLate) {
-        existingLearner.lateCount += 1;
-        existingLearner.presentCount += 1;
-      } else {
-        existingLearner.presentCount += 1;
+      const dateKey = record.date.toISOString().split('T')[0];
+
+      if (record.isPresent) {
+        existingLearner.attendedDays.add(dateKey);
       }
 
-      existingLearner.attendanceRate = existingLearner.totalRecords > 0
-        ? Number(((existingLearner.presentCount / existingLearner.totalRecords) * 100).toFixed(2))
-        : 0;
+      if (record.isLate) {
+        existingLearner.lateCount += 1;
+      }
 
-      learnersMap.set(record.learnerId, existingLearner);
+      if (record.isPresent) {
+        existingLearner.presentCount += 1;
+      }
     });
 
-    const learners = Array.from(learnersMap.values());
+    const learnersWithStats = Array.from(learnersMap.values()).map((learner) => {
+      const inferredAbsenceCount = Math.max(expectedDays.size - learner.attendedDays.size, 0);
+      const attendanceRate = expectedDays.size > 0
+        ? Number(((learner.attendedDays.size / expectedDays.size) * 100).toFixed(2))
+        : 0;
 
-    const mostAbsent = [...learners]
+      return {
+        learnerId: learner.learnerId,
+        firstName: learner.firstName,
+        lastName: learner.lastName,
+        matricule: learner.matricule,
+        photoUrl: learner.photoUrl,
+        promotion: learner.promotion,
+        referential: learner.referential,
+        absenceCount: inferredAbsenceCount,
+        lateCount: learner.lateCount,
+        presentCount: learner.presentCount,
+        totalRecords: learner.totalRecords,
+        attendanceRate,
+      };
+    });
+
+    const mostAbsent = [...learnersWithStats]
       .sort((a, b) =>
         b.absenceCount - a.absenceCount ||
         b.lateCount - a.lateCount ||
@@ -924,7 +980,7 @@ async getDailyStats(date: string, referentialId?: string) {
       .filter((learner) => learner.absenceCount > 0)
       .slice(0, limit);
 
-    const mostLate = [...learners]
+    const mostLate = [...learnersWithStats]
       .sort((a, b) =>
         b.lateCount - a.lateCount ||
         b.absenceCount - a.absenceCount ||
@@ -944,6 +1000,7 @@ async getDailyStats(date: string, referentialId?: string) {
         referentialId: params.referentialId || null,
         limit,
       },
+      expectedDays: expectedDays.size,
       mostAbsent,
       mostLate,
     };
