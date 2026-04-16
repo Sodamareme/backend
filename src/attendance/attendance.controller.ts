@@ -169,6 +169,27 @@ export class AttendanceController {
     return this.attendanceService.getYearlyStats(parseInt(year, 10));
   }
 
+  @Get('stats/at-risk-learners')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get learners with the highest absence and late counts' })
+  @ApiQuery({ name: 'period', required: false, example: 'month' })
+  @ApiQuery({ name: 'promotionId', required: false })
+  @ApiQuery({ name: 'referentialId', required: false })
+  @ApiQuery({ name: 'limit', required: false, example: 5 })
+  async getAtRiskLearners(
+    @Query('period') period?: 'week' | 'month' | 'quarter',
+    @Query('promotionId') promotionId?: string,
+    @Query('referentialId') referentialId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.attendanceService.getAtRiskLearners({
+      period,
+      promotionId,
+      referentialId,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
   // ✅ SURVEILLANT a accès — lecture des stats hebdomadaires
   @Get('stats/weekly')
   @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)

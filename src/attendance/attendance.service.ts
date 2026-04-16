@@ -14,6 +14,31 @@ export class AttendanceService {
     private notificationsService: NotificationsService
   ) {}
 
+  private getAnalyticsDateRange(period: 'week' | 'month' | 'quarter' = 'month') {
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    const startDate = new Date(endDate);
+    startDate.setHours(0, 0, 0, 0);
+
+    switch (period) {
+      case 'week':
+        startDate.setDate(startDate.getDate() - 6);
+        break;
+      case 'quarter':
+        startDate.setMonth(startDate.getMonth() - 3);
+        startDate.setDate(1);
+        break;
+      case 'month':
+      default:
+        startDate.setMonth(startDate.getMonth() - 1);
+        startDate.setDate(1);
+        break;
+    }
+
+    return { startDate, endDate };
+  }
+
   private normalizeAttendanceDate(date: string): Date {
     const attendanceDate = new Date(date);
     if (Number.isNaN(attendanceDate.getTime())) {
@@ -792,6 +817,136 @@ async getDailyStats(date: string, referentialId?: string) {
     }
 
     return { months };
+  }
+
+  async getAtRiskLearners(params: {
+    period?: 'week' | 'month' | 'quarter';
+    promotionId?: string;
+    referentialId?: string;
+    limit?: number;
+  }) {
+    const period = params.period || 'month';
+    const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 20) : 5;
+    const { startDate, endDate } = this.getAnalyticsDateRange(period);
+
+    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+        learner: {
+          ...(params.promotionId ? { promotionId: params.promotionId } : {}),
+          ...(params.referentialId ? { refId: params.referentialId } : {}),
+        },
+      },
+      include: {
+        learner: {
+          include: {
+            promotion: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            referential: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const learnersMap = new Map<string, {
+      learnerId: string;
+      firstName: string;
+      lastName: string;
+      matricule: string;
+      photoUrl: string | null;
+      promotion: { id: string; name: string } | null;
+      referential: { id: string; name: string } | null;
+      absenceCount: number;
+      lateCount: number;
+      presentCount: number;
+      totalRecords: number;
+      attendanceRate: number;
+    }>();
+
+    attendanceRecords.forEach((record) => {
+      const existingLearner = learnersMap.get(record.learnerId) || {
+        learnerId: record.learnerId,
+        firstName: record.learner.firstName,
+        lastName: record.learner.lastName,
+        matricule: record.learner.matricule,
+        photoUrl: record.learner.photoUrl,
+        promotion: record.learner.promotion
+          ? { id: record.learner.promotion.id, name: record.learner.promotion.name }
+          : null,
+        referential: record.learner.referential
+          ? { id: record.learner.referential.id, name: record.learner.referential.name }
+          : null,
+        absenceCount: 0,
+        lateCount: 0,
+        presentCount: 0,
+        totalRecords: 0,
+        attendanceRate: 0,
+      };
+
+      existingLearner.totalRecords += 1;
+
+      if (!record.isPresent) {
+        existingLearner.absenceCount += 1;
+      } else if (record.isLate) {
+        existingLearner.lateCount += 1;
+        existingLearner.presentCount += 1;
+      } else {
+        existingLearner.presentCount += 1;
+      }
+
+      existingLearner.attendanceRate = existingLearner.totalRecords > 0
+        ? Number(((existingLearner.presentCount / existingLearner.totalRecords) * 100).toFixed(2))
+        : 0;
+
+      learnersMap.set(record.learnerId, existingLearner);
+    });
+
+    const learners = Array.from(learnersMap.values());
+
+    const mostAbsent = [...learners]
+      .sort((a, b) =>
+        b.absenceCount - a.absenceCount ||
+        b.lateCount - a.lateCount ||
+        a.attendanceRate - b.attendanceRate
+      )
+      .filter((learner) => learner.absenceCount > 0)
+      .slice(0, limit);
+
+    const mostLate = [...learners]
+      .sort((a, b) =>
+        b.lateCount - a.lateCount ||
+        b.absenceCount - a.absenceCount ||
+        a.attendanceRate - b.attendanceRate
+      )
+      .filter((learner) => learner.lateCount > 0)
+      .slice(0, limit);
+
+    return {
+      period,
+      range: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      },
+      filters: {
+        promotionId: params.promotionId || null,
+        referentialId: params.referentialId || null,
+        limit,
+      },
+      mostAbsent,
+      mostLate,
+    };
   }
 
   async getWeeklyStats(year: number) {
