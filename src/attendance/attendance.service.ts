@@ -1196,6 +1196,11 @@ async getDailyStats(date: string, referentialId?: string) {
 
 @Cron('0 0 15 * * 1-5')
 async markAbsentees() {
+  if (process.env.READ_ONLY_MODE === 'true') {
+    this.logger.log('READ_ONLY_MODE enabled, skipping markAbsentees cron job');
+    return;
+  }
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

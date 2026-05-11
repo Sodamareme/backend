@@ -28,6 +28,7 @@ import { UpdateCoachDto } from './dto/update-coach.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorators';
 
 @Controller('coaches')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -201,6 +202,15 @@ export class CoachesController {
   }
 
   // ========== ROUTES GÉNÉRALES ==========
+
+  /**
+   * GET ALL COACHES
+   */
+  @Get('reference-list')
+  @Public()
+  async getReferenceList() {
+    return this.coachesService.getReferenceList();
+  }
 
   /**
    * GET ALL COACHES
