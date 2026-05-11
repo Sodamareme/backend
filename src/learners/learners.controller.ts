@@ -36,6 +36,7 @@ import { BulkImportResponseDto } from './dto/BulkImportResponseDto';
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
 import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
+import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
 
 type LearnerTutorFormInput = Partial<CreateTutorDto>;
 
@@ -230,6 +231,15 @@ export class LearnersController {
   @ApiOperation({ summary: 'Récupérer tous les apprenants' })
   async findAll() {
     return this.learnersService.findAll();
+  }
+
+  @Get('reference-list')
+  @ApiOperation({
+    summary:
+      "Récupérer une liste légère d'apprenants pour intégration et filtres",
+  })
+  async findReferenceList(@Query() query: LearnersReferenceQueryDto) {
+    return this.learnersService.findReferenceList(query);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

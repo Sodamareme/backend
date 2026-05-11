@@ -77,6 +77,13 @@ export class PromotionsController {
     return this.promotionsService.getActivePromotion();
   }
 
+  @Get('active/reference')
+  @Public()
+  @ApiOperation({ summary: 'Récupérer une version légère de la promotion active' })
+  async getActivePromotionReference() {
+    return this.promotionsService.getActivePromotionReference();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer une promotion par ID' })
   async findOne(@Param('id') id: string) {

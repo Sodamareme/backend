@@ -8,6 +8,23 @@ import { CreatePromotionDto } from './dto/create-promotion.dto';
 @Injectable()
 export class PromotionsService {
   private readonly logger = new Logger(PromotionsService.name);
+  private readonly promotionReferenceSelect = {
+    id: true,
+    name: true,
+    startDate: true,
+    endDate: true,
+    photoUrl: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    referentials: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+      },
+    },
+  } as const;
 
   constructor(
     private prisma: PrismaService,
@@ -239,6 +256,19 @@ export class PromotionsService {
         referentials: true,
         events: true,
       },
+    });
+
+    if (!promotion) {
+      throw new NotFoundException('Aucune promotion active trouvée');
+    }
+
+    return promotion;
+  }
+
+  async getActivePromotionReference() {
+    const promotion = await this.prisma.promotion.findFirst({
+      where: { status: PromotionStatus.ACTIVE },
+      select: this.promotionReferenceSelect,
     });
 
     if (!promotion) {

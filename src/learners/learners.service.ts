@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Gender, Learner, LearnerStatus, PrismaClient } from '@prisma/client';
+import { Gender, Learner, LearnerStatus, Prisma, PrismaClient } from '@prisma/client';
 import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import { AuthUtils } from '../utils/auth.utils';
@@ -12,6 +12,7 @@ import { BulkCreateLearnerDto, BulkCreateLearnersDto, LearnerImportResultDto } f
 import { BulkImportResponseDto, ValidationError } from './dto/BulkImportResponseDto';
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { EmailService } from '../email/email.service';
+import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
 
 @Injectable()
 export class LearnersService {
@@ -881,6 +882,86 @@ export class LearnersService {
         grades: true,
       },
     });
+  }
+
+  async findReferenceList(query: LearnersReferenceQueryDto) {
+    const page = query.page ?? 1;
+    const limit = Math.min(query.limit ?? 20, 100);
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+
+    const where: Prisma.LearnerWhereInput = {
+      ...(query.promotionId ? { promotionId: query.promotionId } : {}),
+      ...(query.refId ? { refId: query.refId } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { matricule: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } },
+              {
+                user: {
+                  email: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, totalItems] = await this.prisma.$transaction([
+      this.prisma.learner.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          matricule: true,
+          phone: true,
+          status: true,
+          user: {
+            select: {
+              email: true,
+            },
+          },
+          promotion: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+            },
+          },
+          referential: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          session: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }),
+      this.prisma.learner.count({ where }),
+    ]);
+
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+      },
+    };
   }
 
   async findOne(id: string): Promise<Learner> {
