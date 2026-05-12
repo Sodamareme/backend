@@ -119,7 +119,6 @@ Comptes de reference crees :
 - admin : `admin@sonatel-academy.sn`
 - restaurateurs : `fatou.restauratrice@sonatel.sn`, `moussa.restaurateur@sonatel.sn`
 - vigils : `alioune.vigil@sonatel.sn`, `mariama.vigil@sonatel.sn`
-- coachs : `awa.coach@sonatel.sn`, `cheikh.coach@sonatel.sn`
 - surveillants : `ibrahima.surveillant@sonatel.sn`, `rokhaya.surveillant@sonatel.sn`
 
 Mots de passe de seed actuels :
@@ -127,7 +126,6 @@ Mots de passe de seed actuels :
 - admin : `Admin1234!`
 - restaurateurs : `Restau123!`
 - vigils : `Vigil123!`
-- coachs : `Coach123!`
 - surveillants : `Surveil123!`
 
 Attention :

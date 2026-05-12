@@ -98,45 +98,6 @@ async function main() {
     console.log(`✅ Vigil ajouté : ${vigil.email}`);
   }
 
-  // ------------------ COACHS ------------------
-const coachesData = [
-  {
-    firstName: 'Awa',
-    lastName: 'Sow',
-    email: 'awa.coach@sonatel.sn',
-    phone: '+221785555555',
-    matricule: 'COACH001',
-  },
-  {
-    firstName: 'Cheikh',
-    lastName: 'Ndiaye',
-    email: 'cheikh.coach@sonatel.sn',
-    phone: '+221786666666',
-    matricule: 'COACH002',
-  },
-];
-
-for (const c of coachesData) {
-  const password = await bcrypt.hash('Coach123!', 10);
-  const coach = await prisma.user.upsert({
-    where: { email: c.email },
-    update: {},
-    create: {
-      email: c.email,
-      password,
-      role: UserRole.COACH,
-      coach: {
-        create: {
-          firstName: c.firstName,
-          lastName: c.lastName,
-          phone: c.phone,
-          matricule: c.matricule, // ✅ Ajout ici
-        },
-      },
-    },
-  });
-  console.log(`✅ Coach ajouté : ${coach.email}`);
-}
  // ------------------ SURVEILLANTS ------------------  ✅ NOUVEAU BLOC
   const surveillantsData = [
     {
