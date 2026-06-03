@@ -987,8 +987,11 @@ export class LearnersService {
   }
 
   async findByEmail(email: string): Promise<Learner> {
-    const learner = await this.prisma.learner.findFirst({
+    const learners = await this.prisma.learner.findMany({
       where: { user: { email } },
+      orderBy: {
+        createdAt: 'desc',
+      },
       include: {
         user: true,
         referential: true,
@@ -1000,6 +1003,11 @@ export class LearnersService {
         documents: true,
       },
     });
+
+    const learner =
+      learners.find((item) => item.status === 'ACTIVE') ??
+      learners.find((item) => item.status === 'REPLACEMENT') ??
+      learners[0];
 
     if (!learner) {
       throw new NotFoundException(`Aucun apprenant trouvé avec l'email ${email}`);
