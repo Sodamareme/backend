@@ -1131,6 +1131,8 @@ export class LearnersService {
         learnerId: true,
         date: true,
         isPresent: true,
+        isLate: true,
+        status: true,
       },
     });
 
@@ -1142,20 +1144,39 @@ export class LearnersService {
       (record) => record.learnerId === id
     );
 
+    const getAttendanceDayKey = (date: Date) => date.toISOString().split('T')[0];
+
     const attendedDays = new Set(
       learnerAttendanceRecords
         .filter((record) => record.isPresent)
-        .map((record) => record.date.toISOString().split('T')[0])
+        .map((record) => getAttendanceDayKey(record.date))
+    );
+
+    const lateDays = new Set(
+      learnerAttendanceRecords
+        .filter((record) => record.isPresent && record.isLate)
+        .map((record) => getAttendanceDayKey(record.date))
+    );
+
+    const justifiedAbsentDays = new Set(
+      learnerAttendanceRecords
+        .filter((record) => !record.isPresent && record.status === 'APPROVED')
+        .map((record) => getAttendanceDayKey(record.date))
     );
 
     const totalDays = expectedDays.size;
     const presentDays = attendedDays.size;
     const absentDays = Math.max(totalDays - presentDays, 0);
+    const justifiedAbsenceDays = Math.min(justifiedAbsentDays.size, absentDays);
+    const unjustifiedAbsentDays = Math.max(absentDays - justifiedAbsenceDays, 0);
 
     return {
       totalDays,
       presentDays,
+      lateDays: lateDays.size,
       absentDays,
+      justifiedAbsentDays: justifiedAbsenceDays,
+      unjustifiedAbsentDays,
       attendanceRate: totalDays > 0 ? (presentDays / totalDays) * 100 : 0,
     };
   }
