@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Gender, Learner, LearnerStatus, Prisma, PrismaClient } from '@prisma/client';
+import { AbsenceStatus, Gender, Learner, LearnerStatus, Prisma, PrismaClient } from '@prisma/client';
 import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import { AuthUtils } from '../utils/auth.utils';
@@ -1331,29 +1331,47 @@ export class LearnersService {
   }
 
   async getAttendanceByLearner(learnerId: string) {
-    const learnerExists = await this.prisma.learner.findUnique({
+    const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
+      include: {
+        referential: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        promotion: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
 
-    if (!learnerExists) {
+    if (!learner) {
       throw new NotFoundException(`Apprenant ${learnerId} introuvable`);
     }
 
-    return this.prisma.learnerAttendance.findMany({
-      where: { learnerId },
-      orderBy: { date: 'desc' },
+    const cohortLearners = await this.prisma.learner.findMany({
+      where: {
+        promotionId: learner.promotionId,
+        refId: learner.refId,
+        status: {
+          in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+        },
+      },
       select: {
         id: true,
-        date: true,
-        isPresent: true,
-        isLate: true,
-        scanTime: true,
-        status: true,
-        justification: true,
-        documentUrl: true,
-        justificationComment: true,
-        createdAt: true,
-        updatedAt: true,
+      },
+    });
+
+    const cohortAttendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: {
+        learnerId: {
+          in: cohortLearners.map((cohortLearner) => cohortLearner.id),
+        },
+      },
+      include: {
         learner: {
           select: {
             id: true,
@@ -1361,11 +1379,62 @@ export class LearnersService {
             lastName: true,
             matricule: true,
             photoUrl: true,
-            referential: { select: { id: true, name: true } },
+            referential: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
+      orderBy: {
+        date: 'desc',
+      },
     });
+
+    const learnerRecords = cohortAttendanceRecords.filter((record) => record.learnerId === learnerId);
+    const learnerDates = new Set(
+      learnerRecords.map((record) => record.date.toISOString().split('T')[0]),
+    );
+
+    const expectedDates = Array.from(
+      new Set(cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])),
+    );
+
+    const generatedAbsentRecords = expectedDates
+      .filter((dateKey) => !learnerDates.has(dateKey))
+      .map((dateKey) => ({
+        id: `absent-${learnerId}`,
+        learnerId,
+        date: new Date(dateKey),
+        scanTime: null,
+        isPresent: false,
+        isLate: false,
+        status: AbsenceStatus.TO_JUSTIFY,
+        justification: null,
+        documentUrl: null,
+        justificationComment: null,
+        createdAt: new Date(dateKey),
+        updatedAt: new Date(dateKey),
+        learner: {
+          id: learner.id,
+          firstName: learner.firstName,
+          lastName: learner.lastName,
+          matricule: learner.matricule,
+          photoUrl: learner.photoUrl,
+          referential: learner.referential
+            ? {
+                id: learner.referential.id,
+                name: learner.referential.name,
+              }
+            : null,
+        },
+      }));
+
+    return [...learnerRecords, ...generatedAbsentRecords].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
   }
 async updatePhoto(id: string, photoFile: Express.Multer.File): Promise<{ photoUrl: string }> {
   await this.findOne(id);
