@@ -24,6 +24,15 @@ export class LearnersService {
     private emailService: EmailService,
   ) {}
 
+  private getAttendanceDayKey(date: Date): string {
+    return date.toISOString().split('T')[0];
+  }
+
+  private isInstructionDay(date: Date): boolean {
+    const day = date.getDay();
+    return day !== 0 && day !== 6;
+  }
+
   // ==========================================
   // CRÉATION D'UN APPRENANT
   // ==========================================
@@ -1145,31 +1154,31 @@ export class LearnersService {
     });
 
     const expectedDays = new Set(
-      cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])
+      cohortAttendanceRecords
+        .filter((record) => this.isInstructionDay(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     const learnerAttendanceRecords = cohortAttendanceRecords.filter(
-      (record) => record.learnerId === id
+      (record) => record.learnerId === id && this.isInstructionDay(record.date)
     );
-
-    const getAttendanceDayKey = (date: Date) => date.toISOString().split('T')[0];
 
     const attendedDays = new Set(
       learnerAttendanceRecords
         .filter((record) => record.isPresent)
-        .map((record) => getAttendanceDayKey(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     const lateDays = new Set(
       learnerAttendanceRecords
         .filter((record) => record.isPresent && record.isLate)
-        .map((record) => getAttendanceDayKey(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     const justifiedAbsentDays = new Set(
       learnerAttendanceRecords
         .filter((record) => !record.isPresent && record.status === 'APPROVED')
-        .map((record) => getAttendanceDayKey(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     const totalDays = expectedDays.size;
@@ -1393,19 +1402,46 @@ export class LearnersService {
       },
     });
 
-    const learnerRecords = cohortAttendanceRecords.filter((record) => record.learnerId === learnerId);
+    const learnerRecordsByDay = new Map<string, (typeof cohortAttendanceRecords)[number]>();
+
+    for (const record of cohortAttendanceRecords) {
+      if (record.learnerId !== learnerId || !this.isInstructionDay(record.date)) {
+        continue;
+      }
+
+      const dateKey = this.getAttendanceDayKey(record.date);
+      const existingRecord = learnerRecordsByDay.get(dateKey);
+
+      if (!existingRecord) {
+        learnerRecordsByDay.set(dateKey, record);
+        continue;
+      }
+
+      const currentUpdatedAt = record.updatedAt?.getTime?.() ?? record.date.getTime();
+      const existingUpdatedAt = existingRecord.updatedAt?.getTime?.() ?? existingRecord.date.getTime();
+
+      if (currentUpdatedAt > existingUpdatedAt) {
+        learnerRecordsByDay.set(dateKey, record);
+      }
+    }
+
+    const learnerRecords = Array.from(learnerRecordsByDay.values());
     const learnerDates = new Set(
-      learnerRecords.map((record) => record.date.toISOString().split('T')[0]),
+      learnerRecords.map((record) => this.getAttendanceDayKey(record.date)),
     );
 
     const expectedDates = Array.from(
-      new Set(cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])),
+      new Set(
+        cohortAttendanceRecords
+          .filter((record) => this.isInstructionDay(record.date))
+          .map((record) => this.getAttendanceDayKey(record.date))
+      ),
     );
 
     const generatedAbsentRecords = expectedDates
       .filter((dateKey) => !learnerDates.has(dateKey))
       .map((dateKey) => ({
-        id: `absent-${learnerId}`,
+        id: `absent-${learnerId}-${dateKey}`,
         learnerId,
         date: new Date(dateKey),
         scanTime: null,
