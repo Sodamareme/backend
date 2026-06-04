@@ -70,7 +70,10 @@ export class AttendanceService {
       throw new BadRequestException('A date is required to update a generated absence record');
     }
 
-    const learnerId = attendanceId.replace('absent-', '');
+    const generatedAbsenceMatch = attendanceId.match(/^absent-(.+)-(\d{4}-\d{2}-\d{2})$/);
+    const learnerId = generatedAbsenceMatch
+      ? generatedAbsenceMatch[1]
+      : attendanceId.replace('absent-', '');
     const attendanceDate = this.normalizeAttendanceDate(date);
 
     const existingAttendance = await this.prisma.learnerAttendance.findFirst({
@@ -409,7 +412,7 @@ export class AttendanceService {
     });
 
     await this.notificationsService.createJustificationNotification(
-      attendanceId,
+      attendance.id,
       attendance.learnerId,
       `${attendance.learner.firstName} ${attendance.learner.lastName} a soumis une justification ${attendance.isLate ? 'de retard' : 'd\'absence'}`
     );
