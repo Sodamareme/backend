@@ -391,10 +391,13 @@ export class AttendanceService {
   async submitAbsenceJustification(
     attendanceId: string,
     justification: string,
+    date?: string,
     documentUrl?: string,
   ) {
+    const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+
     const attendance = await this.prisma.learnerAttendance.update({
-      where: { id: attendanceId },
+      where: { id: attendanceRecord.id },
       data: {
         justification,
         documentUrl,
@@ -1249,12 +1252,40 @@ async markAbsentees() {
 }
 
   async getAttendanceByLearner(learnerId: string) {
-    return this.prisma.learnerAttendance.findMany({
-      where: {
-        learnerId: learnerId
+    const learner = await this.prisma.learner.findUnique({
+      where: { id: learnerId },
+      include: {
+        referential: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
-      orderBy: {
-        date: 'desc'
+    });
+
+    if (!learner) {
+      throw new NotFoundException(`Apprenant ${learnerId} introuvable`);
+    }
+
+    const cohortLearners = await this.prisma.learner.findMany({
+      where: {
+        promotionId: learner.promotionId,
+        ...(learner.refId ? { refId: learner.refId } : {}),
+        status: {
+          in: ['ACTIVE', 'REPLACEMENT'],
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const cohortAttendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: {
+        learnerId: {
+          in: cohortLearners.map((cohortLearner) => cohortLearner.id),
+        },
       },
       include: {
         learner: {
@@ -1265,13 +1296,55 @@ async markAbsentees() {
             photoUrl: true,
             referential: {
               select: {
-                name: true
-              }
-            }
-          }
-        }
-      }
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        date: 'desc',
+      },
     });
+
+    const learnerRecords = cohortAttendanceRecords.filter((record) => record.learnerId === learnerId);
+    const learnerDates = new Set(
+      learnerRecords.map((record) => record.date.toISOString().split('T')[0]),
+    );
+
+    const expectedDates = Array.from(
+      new Set(cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])),
+    );
+
+    const generatedAbsentRecords = expectedDates
+      .filter((dateKey) => !learnerDates.has(dateKey))
+      .map((dateKey) => ({
+        id: `absent-${learnerId}`,
+        learnerId,
+        date: new Date(dateKey),
+        scanTime: null,
+        isPresent: false,
+        isLate: false,
+        status: AbsenceStatus.TO_JUSTIFY,
+        justification: null,
+        documentUrl: null,
+        justificationComment: null,
+        learner: {
+          firstName: learner.firstName,
+          lastName: learner.lastName,
+          matricule: learner.matricule,
+          photoUrl: learner.photoUrl,
+          referential: learner.referential
+            ? {
+                name: learner.referential.name,
+              }
+            : null,
+        },
+      }));
+
+    return [...learnerRecords, ...generatedAbsentRecords].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
   }
   async updateAttendanceStatus(
     id: string,

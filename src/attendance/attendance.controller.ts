@@ -76,6 +76,7 @@ export class AttendanceController {
   async submitJustification(
     @Param('id') id: string,
     @Body('justification') justification: string,
+    @Body('date') date?: string,
     @UploadedFile() document?: Express.Multer.File,
   ) {
     let documentUrl: string | undefined;
@@ -88,7 +89,7 @@ export class AttendanceController {
         throw new InternalServerErrorException('Failed to upload document');
       }
     }
-    return this.attendanceService.submitAbsenceJustification(id, justification, documentUrl);
+    return this.attendanceService.submitAbsenceJustification(id, justification, date, documentUrl);
   }
 
   @Put('absence/:id/status')
