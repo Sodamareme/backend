@@ -1,4 +1,4 @@
 @Library('jenkins-shared-lib@main') _
 
-sharedPipeline(appName: 'mon-api')
+sharedPipeline(appName: 'backend')
 // Tout le reste est auto-détecté ✅
