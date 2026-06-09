@@ -1,5 +1,6 @@
 import { ModulesService } from './modules.service';
 import { CreateModuleDto } from './dto/create-module.dto';
+import { UpdateModuleDto } from './dto/update-module.dto';
 export declare class ModulesController {
     private readonly modulesService;
     constructor(modulesService: ModulesService);
@@ -11,12 +12,12 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }>;
-    findAll(): Promise<{
+    findAll(refId?: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -24,9 +25,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }[]>;
     getActiveModules(): Promise<{
@@ -37,9 +38,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }[]>;
     getModulesByReferential(refId: string): Promise<{
@@ -50,9 +51,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }[]>;
     findOne(id: string): Promise<{
@@ -63,9 +64,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }>;
     getGradesByModule(id: string): Promise<{
@@ -85,7 +86,7 @@ export declare class ModulesController {
             };
         };
     }[]>;
-    update(id: string, data: any): Promise<{
+    update(id: string, updateModuleDto: UpdateModuleDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -93,9 +94,9 @@ export declare class ModulesController {
         photoUrl: string | null;
         refId: string;
         sessionId: string | null;
+        description: string | null;
         startDate: Date;
         endDate: Date;
-        description: string | null;
         coachId: string;
     }>;
     addGrade(moduleId: string, data: {
@@ -113,11 +114,11 @@ export declare class ModulesController {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
-    updateGrade(gradeId: string, data: {
+    updateGrade(moduleId: string, gradeId: string, data: {
         value: number;
         comment?: string;
     }): Promise<{
@@ -131,8 +132,8 @@ export declare class ModulesController {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
 }

@@ -10,14 +10,16 @@ import {
   HttpStatus,
   UploadedFile,
   UseInterceptors,
+  ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { ModulesService } from './modules.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { CreateModuleDto } from './dto/create-module.dto';
+import { UpdateModuleDto } from './dto/update-module.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
@@ -95,8 +97,16 @@ export class ModulesController {
   @Put(':id')
   @Roles(UserRole.ADMIN, UserRole.COACH)
   @ApiOperation({ summary: 'Mettre à jour un module' })
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.modulesService.update(id, data);
+  @ApiBody({ type: UpdateModuleDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Module updated successfully',
+  })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateModuleDto: UpdateModuleDto,
+  ) {
+    return this.modulesService.update(id, updateModuleDto);
   }
 
   @Post(':id/grades')

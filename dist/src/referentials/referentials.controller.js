@@ -18,7 +18,10 @@ const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const swagger_1 = require("@nestjs/swagger");
 const referentials_service_1 = require("./referentials.service");
+const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
+const roles_guard_1 = require("../auth/guards/roles.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
+const public_decorators_1 = require("../auth/decorators/public.decorators");
 const client_1 = require("@prisma/client");
 const cloudinary_service_1 = require("../cloudinary/cloudinary.service");
 let ReferentialsController = ReferentialsController_1 = class ReferentialsController {
@@ -85,6 +88,7 @@ let ReferentialsController = ReferentialsController_1 = class ReferentialsContro
 exports.ReferentialsController = ReferentialsController;
 __decorate([
     (0, common_1.Post)(),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
     (0, swagger_1.ApiOperation)({ summary: 'Create a new referential' }),
     (0, swagger_1.ApiResponse)({ status: common_1.HttpStatus.CREATED, description: 'Referential created' }),
     (0, swagger_1.ApiConsumes)('multipart/form-data'),
@@ -106,6 +110,7 @@ __decorate([
 ], ReferentialsController.prototype, "assignToPromotion", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, public_decorators_1.Public)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer tous les référentiels' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -113,6 +118,7 @@ __decorate([
 ], ReferentialsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)("all"),
+    (0, public_decorators_1.Public)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer tous les référentiels' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -120,6 +126,7 @@ __decorate([
 ], ReferentialsController.prototype, "findAllReferentials", null);
 __decorate([
     (0, common_1.Get)(':id'),
+    (0, public_decorators_1.Public)(),
     (0, swagger_1.ApiOperation)({ summary: 'Récupérer un référentiel par ID' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -147,6 +154,8 @@ __decorate([
 exports.ReferentialsController = ReferentialsController = ReferentialsController_1 = __decorate([
     (0, swagger_1.ApiTags)('referentials'),
     (0, common_1.Controller)('referentials'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, swagger_1.ApiBearerAuth)(),
     __metadata("design:paramtypes", [referentials_service_1.ReferentialsService,
         cloudinary_service_1.CloudinaryService])
 ], ReferentialsController);

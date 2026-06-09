@@ -18,79 +18,83 @@ export declare class AttendanceController {
     submitJustification(id: string, justification: string, document?: Express.Multer.File): Promise<{
         learner: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
             status: import(".prisma/client").$Enums.LearnerStatus;
-            qrCode: string;
-            userId: string;
             refId: string | null;
             promotionId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
     updateAbsenceStatus(id: string, updateStatusDto: {
         status: AbsenceStatus;
         comment?: string;
+        date?: string;
     }): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
-    forceApprove(id: string): Promise<{
+    forceApprove(id: string, body: {
+        date?: string;
+    }): Promise<{
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
     updateStatus(id: string, body: {
         status: 'present' | 'late' | 'absent';
+        date?: string;
     }): Promise<{
         learner: {
             referential: {
                 id: string;
-                photoUrl: string | null;
                 createdAt: Date;
                 updatedAt: Date;
                 name: string;
+                photoUrl: string | null;
                 description: string | null;
                 capacity: number;
                 numberOfSessions: number;
@@ -98,36 +102,36 @@ export declare class AttendanceController {
             };
         } & {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             firstName: string;
             lastName: string;
+            phone: string;
+            userId: string;
+            photoUrl: string | null;
+            matricule: string;
+            qrCode: string;
             address: string | null;
             gender: import(".prisma/client").$Enums.Gender;
             birthDate: Date;
             birthPlace: string;
-            phone: string;
-            photoUrl: string | null;
             status: import(".prisma/client").$Enums.LearnerStatus;
-            qrCode: string;
-            userId: string;
             refId: string | null;
             promotionId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            matricule: string;
             sessionId: string | null;
         };
     } & {
         id: string;
-        status: import(".prisma/client").$Enums.AbsenceStatus;
         createdAt: Date;
         updatedAt: Date;
+        status: import(".prisma/client").$Enums.AbsenceStatus;
         date: Date;
+        learnerId: string;
         isPresent: boolean;
         isLate: boolean;
         scanTime: Date | null;
         justification: string | null;
         documentUrl: string | null;
-        learnerId: string;
         justificationComment: string | null;
     }>;
     getLatestScans(): Promise<{
@@ -209,13 +213,13 @@ export declare class AttendanceController {
         attendance: ({
             id: string;
             date: string;
-            scanTime: string;
+            scanTime: any;
             isPresent: boolean;
             isLate: boolean;
-            status: import(".prisma/client").$Enums.AbsenceStatus;
-            justification: string;
-            documentUrl: string;
-            justificationComment: string;
+            status: "TO_JUSTIFY";
+            justification: any;
+            documentUrl: any;
+            justificationComment: any;
             learner: {
                 id: string;
                 firstName: string;
@@ -231,13 +235,13 @@ export declare class AttendanceController {
         } | {
             id: string;
             date: string;
-            scanTime: any;
+            scanTime: string;
             isPresent: boolean;
             isLate: boolean;
-            status: "TO_JUSTIFY";
-            justification: any;
-            documentUrl: any;
-            justificationComment: any;
+            status: import(".prisma/client").$Enums.AbsenceStatus;
+            justification: string;
+            documentUrl: string;
+            justificationComment: string;
             learner: {
                 id: string;
                 firstName: string;

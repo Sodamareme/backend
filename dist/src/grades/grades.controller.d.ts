@@ -19,17 +19,17 @@ export declare class GradesController {
             id: string;
             name: string;
             refId: string;
+            description: string;
             startDate: Date;
             endDate: Date;
-            description: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
     findAll(): Promise<({
@@ -44,17 +44,17 @@ export declare class GradesController {
         module: {
             id: string;
             name: string;
+            description: string;
             startDate: Date;
             endDate: Date;
-            description: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     })[]>;
     getGradesByLearner(learnerId: string): Promise<({
@@ -68,17 +68,17 @@ export declare class GradesController {
         module: {
             id: string;
             name: string;
+            description: string;
             startDate: Date;
             endDate: Date;
-            description: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     })[]>;
     getGradesByModule(moduleId: string): Promise<({
@@ -96,9 +96,9 @@ export declare class GradesController {
             name: string;
             photoUrl: string;
             refId: string;
+            description: string;
             startDate: Date;
             endDate: Date;
-            description: string;
             coachId: string;
         };
     } & {
@@ -106,8 +106,8 @@ export declare class GradesController {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     })[]>;
     findOne(id: string): Promise<{
@@ -128,8 +128,8 @@ export declare class GradesController {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
     update(id: string, updateGradeDto: UpdateGradeDto): Promise<{
@@ -150,8 +150,8 @@ export declare class GradesController {
         createdAt: Date;
         updatedAt: Date;
         learnerId: string;
-        comment: string | null;
         value: number;
+        comment: string | null;
         moduleId: string;
     }>;
     remove(id: string): Promise<{

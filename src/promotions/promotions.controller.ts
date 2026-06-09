@@ -21,14 +21,17 @@ import { PromotionsService } from './promotions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorators';
 import { Promotion, PromotionStatus, UserRole } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { AddReferentialsDto } from './dto/add-referentials.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdatePromotionDto } from './dto/update-promotion.dto';
 
 @ApiTags('promotions')
 @Controller('promotions')
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class PromotionsController {
   private readonly logger = new Logger(PromotionsController.name);
@@ -36,6 +39,7 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('photo'))
   async create(
     @Body() createPromotionDto: CreatePromotionDto,
@@ -60,12 +64,14 @@ export class PromotionsController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Récupérer toutes les promotions' })
   async findAll() {
     return this.promotionsService.findAll();
   }
 
   @Get('active')
+  @Public()
   @ApiOperation({ summary: 'Récupérer la promotion active' })
   async getActivePromotion() {
     return this.promotionsService.getActivePromotion();
@@ -84,10 +90,11 @@ export class PromotionsController {
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Mettre à jour une promotion' })
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.promotionsService.update(id, data);
+  async update(@Param('id') id: string, @Body() updatePromotionDto: UpdatePromotionDto) {
+    return this.promotionsService.update(id, updatePromotionDto);
   }
 
   @Patch(':id/status')
@@ -98,14 +105,14 @@ export class PromotionsController {
   @ApiResponse({ status: 404, description: 'Promotion not found' })
   async updateStatus(
     @Param('id') id: string,
-    @Body() updateStatusDto: { status: PromotionStatus }
+    @Body() updateStatusDto: UpdateStatusDto,
   ): Promise<Promotion> {
     this.logger.debug(`Updating status for promotion ${id} to ${updateStatusDto.status}`);
     return this.promotionsService.update(id, { status: updateStatusDto.status });
   }
 
   @Post(':id/referentials')
-  // @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Add referentials to a promotion' })
   @ApiResponse({ status: 200, description: 'Referentials added successfully' })
   @ApiResponse({ status: 404, description: 'Promotion not found' })

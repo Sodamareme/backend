@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   ValidationPipe,
   UsePipes,
   Logger,
@@ -28,20 +29,10 @@ export class GradesController {
   @Post()
   @ApiOperation({ summary: 'Create a new grade' })
   async create(@Body() createGradeDto: CreateGradeDto) {
-    console.log('\n========================================');
-    console.log('🎯 POST /grades ENDPOINT HIT');
-    console.log('📅 Timestamp:', new Date().toISOString());
-    console.log('📦 Body received:', JSON.stringify(createGradeDto, null, 2));
-    console.log('========================================\n');
-
-    try {
-      const result = await this.gradesService.create(createGradeDto);
-      console.log('✅ Grade created successfully:', result.id);
-      return result;
-    } catch (error) {
-      console.error('❌ Error in create grade:', error);
-      throw error;
-    }
+    this.logger.log(
+      `Creating grade for learner ${createGradeDto.learnerId} in module ${createGradeDto.moduleId}`,
+    );
+    return this.gradesService.create(createGradeDto);
   }
 
   @Get()
@@ -56,7 +47,9 @@ export class GradesController {
   @Get('learner/:learnerId')
   @ApiOperation({ summary: 'Get all grades for a specific learner' })
   @ApiParam({ name: 'learnerId', description: 'Learner ID (UUID format)' })
-  async getGradesByLearner(@Param('learnerId') learnerId: string) {
+  async getGradesByLearner(
+    @Param('learnerId', ParseUUIDPipe) learnerId: string,
+  ) {
     this.logger.log(`Fetching grades for learner: ${learnerId}`);
     return this.gradesService.getGradesByLearner(learnerId);
   }
@@ -64,7 +57,9 @@ export class GradesController {
   @Get('module/:moduleId')
   @ApiOperation({ summary: 'Get all grades for a specific module' })
   @ApiParam({ name: 'moduleId', description: 'Module ID (UUID format)' })
-  async getGradesByModule(@Param('moduleId') moduleId: string) {
+  async getGradesByModule(
+    @Param('moduleId', ParseUUIDPipe) moduleId: string,
+  ) {
     this.logger.log(`Fetching grades for module: ${moduleId}`);
     return this.gradesService.getGradesByModule(moduleId);
   }
@@ -72,7 +67,7 @@ export class GradesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a grade by ID' })
   @ApiParam({ name: 'id', description: 'Grade ID (UUID format)' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     this.logger.log(`Fetching grade with ID: ${id}`);
     return this.gradesService.findOne(id);
   }
@@ -80,7 +75,10 @@ export class GradesController {
   @Put(':id')
   @ApiOperation({ summary: 'Update a grade' })
   @ApiParam({ name: 'id', description: 'Grade ID (UUID format)' })
-  async update(@Param('id') id: string, @Body() updateGradeDto: UpdateGradeDto) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateGradeDto: UpdateGradeDto,
+  ) {
     this.logger.log(`Updating grade with ID: ${id}`);
     return this.gradesService.update(id, updateGradeDto);
   }
@@ -88,7 +86,7 @@ export class GradesController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a grade' })
   @ApiParam({ name: 'id', description: 'Grade ID (UUID format)' })
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
     this.logger.log(`Deleting grade with ID: ${id}`);
     return this.gradesService.remove(id);
   }

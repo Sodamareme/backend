@@ -16,12 +16,12 @@ export declare class UsersService {
     }>;
     getUserDetailsByRole(user: User): Promise<{
         id: string;
+        createdAt: Date;
+        updatedAt: Date;
         firstName: string;
         lastName: string;
         phone: string | null;
-        photoUrl: string | null;
         userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+        photoUrl: string | null;
     }>;
 }

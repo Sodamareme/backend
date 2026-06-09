@@ -10,6 +10,8 @@ exports.RestaurateursModule = void 0;
 const common_1 = require("@nestjs/common");
 const restaurateurs_service_1 = require("./restaurateurs.service");
 const restaurateurs_controller_1 = require("./restaurateurs.controller");
+const meal_scans_controller_1 = require("./meal-scans.controller");
+const meal_scans_service_1 = require("./meal-scans.service");
 const prisma_module_1 = require("../prisma/prisma.module");
 const cloudinary_module_1 = require("../cloudinary/cloudinary.module");
 const vigils_module_1 = require("../vigils/vigils.module");
@@ -18,10 +20,10 @@ let RestaurateursModule = class RestaurateursModule {
 exports.RestaurateursModule = RestaurateursModule;
 exports.RestaurateursModule = RestaurateursModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, cloudinary_module_1.CloudinaryModule, vigils_module_1.VigilsModule, RestaurateursModule],
-        controllers: [restaurateurs_controller_1.RestaurateursController],
-        providers: [restaurateurs_service_1.RestaurateursService],
-        exports: [restaurateurs_service_1.RestaurateursService],
+        imports: [prisma_module_1.PrismaModule, cloudinary_module_1.CloudinaryModule, vigils_module_1.VigilsModule],
+        controllers: [restaurateurs_controller_1.RestaurateursController, meal_scans_controller_1.MealScansController],
+        providers: [restaurateurs_service_1.RestaurateursService, meal_scans_service_1.MealScansService],
+        exports: [restaurateurs_service_1.RestaurateursService, meal_scans_service_1.MealScansService],
     })
 ], RestaurateursModule);
 //# sourceMappingURL=restaurateurs.module.js.map

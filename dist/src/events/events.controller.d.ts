@@ -7,9 +7,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;
@@ -19,9 +19,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;
@@ -31,9 +31,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;
@@ -43,9 +43,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;
@@ -55,9 +55,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;
@@ -67,9 +67,9 @@ export declare class EventsController {
         createdAt: Date;
         updatedAt: Date;
         promotionId: string;
+        description: string;
         startDate: Date;
         endDate: Date;
-        description: string;
         type: string;
         title: string;
         location: string | null;

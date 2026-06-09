@@ -28,6 +28,9 @@ __decorate([
 ], RegisterDto.prototype, "password", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 'USER', required: false }),
+    __metadata("design:type", Array)
+], RegisterDto.prototype, "enum", void 0);
+__decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "role", void 0);

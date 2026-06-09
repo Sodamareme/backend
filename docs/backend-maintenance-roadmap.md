@@ -8,6 +8,18 @@ Le choix retenu est:
 - garder les sujets transverses dans des PR separees
 - faire des PR petites, testables et faciles a reviewer
 
+## Mise A Jour Au 2026-03-31
+
+Avancement Dev 1:
+- termine: `fix/backend-attendance-vigil-access`
+- termine: `docs/backend-role-access-matrix`
+- termine: `refactor/backend-coaches-logging`
+- termine: `refactor/backend-attendance-typing`
+- en cours: `chore/backend-standardize-auth-protection`
+
+Prochaine US recommandee apres merge:
+- `fix/backend-auth-role-resolution`
+
 ## Strategie De Travail A Deux
 
 ### Principe principal
@@ -158,6 +170,9 @@ Commit:
 Owner:
 - Dev 1
 
+Statut:
+- Termine le 2026-03-31
+
 #### US-ATT-02
 Titre: Documenter la matrice d'acces des routes attendance
 
@@ -177,6 +192,9 @@ Commit:
 Owner:
 - Dev 1
 
+Statut:
+- Termine le 2026-03-31
+
 #### US-ATT-03
 Titre: Reduire les types faibles dans `attendance.service`
 
@@ -195,6 +213,9 @@ Commit:
 
 Owner:
 - Dev 1
+
+Statut:
+- Termine le 2026-03-31
 
 ### Module `coaches`
 Etat:
@@ -218,6 +239,9 @@ Commit:
 
 Owner:
 - Dev 1
+
+Statut:
+- Termine le 2026-03-31
 
 #### US-COA-02
 Titre: Renforcer le typage des payloads dans `coaches`
@@ -427,6 +451,9 @@ Commit:
 Owner:
 - Dev 1
 
+Statut:
+- En cours le 2026-03-31
+
 ### TRANS-02
 Titre: Clarifier l'environnement backend local, docker et seed
 
@@ -478,6 +505,10 @@ Owner:
 ### Sprint 4
 - Dev 1: `refactor/backend-attendance-typing`
 - Dev 2: `chore/backend-env-contract`
+
+### Sprint 5
+- Dev 1: `chore/backend-standardize-auth-protection`
+- Dev 2: `chore/backend-referentials-auth-policy`
 
 ## Ordre De Merge Recommande
 1. `fix/backend-attendance-vigil-access`
