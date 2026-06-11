@@ -39,12 +39,25 @@ export class AttendanceService {
     return { startDate, endDate };
   }
 
+  private getTodayStart(): Date {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+
+  private assertNotFutureAttendanceDate(date: Date) {
+    if (date.getTime() > this.getTodayStart().getTime()) {
+      throw new BadRequestException('Future attendance dates are not allowed');
+    }
+  }
+
   private normalizeAttendanceDate(date: string): Date {
     const attendanceDate = new Date(date);
     if (Number.isNaN(attendanceDate.getTime())) {
       throw new BadRequestException('Invalid attendance date');
     }
     attendanceDate.setHours(0, 0, 0, 0);
+    this.assertNotFutureAttendanceDate(attendanceDate);
     return attendanceDate;
   }
 
@@ -62,6 +75,8 @@ export class AttendanceService {
       if (!attendance) {
         throw new NotFoundException('Attendance record not found');
       }
+
+      this.assertNotFutureAttendanceDate(attendance.date);
 
       return attendance;
     }
@@ -398,6 +413,7 @@ export class AttendanceService {
     documentUrl?: string,
   ) {
     const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+    this.assertNotFutureAttendanceDate(attendanceRecord.date);
 
     const attendance = await this.prisma.learnerAttendance.update({
       where: { id: attendanceRecord.id },
@@ -428,6 +444,7 @@ async updateAbsenceStatus(
   date?: string
 ): Promise<LearnerAttendance> {
   const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+  this.assertNotFutureAttendanceDate(attendance.date);
 
   // ✅ MODIFICATION : Permettre la mise à jour même si déjà traité
   // On refuse seulement si c'est déjà approuvé ET qu'on essaie d'approuver à nouveau
@@ -460,6 +477,7 @@ async updateAbsenceStatus(
 }
 async forceApprove(attendanceId: string, date?: string): Promise<LearnerAttendance> {
   const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+  this.assertNotFutureAttendanceDate(attendance.date);
 
   // ✅ Pas de vérification de justification — l'admin force l'autorisation
   const updated = await this.prisma.learnerAttendance.update({
@@ -1359,6 +1377,7 @@ async markAbsentees() {
 
     if (id.startsWith('absent-')) {
       const attendance = await this.resolveLearnerAttendanceRecord(id, date);
+      this.assertNotFutureAttendanceDate(attendance.date);
 
       return this.prisma.learnerAttendance.update({
         where: { id: attendance.id },
@@ -1374,6 +1393,17 @@ async markAbsentees() {
         },
       });
     }
+
+    const existingAttendance = await this.prisma.learnerAttendance.findUnique({
+      where: { id },
+      select: { date: true },
+    });
+
+    if (!existingAttendance) {
+      throw new NotFoundException('Attendance record not found');
+    }
+
+    this.assertNotFutureAttendanceDate(existingAttendance.date);
 
     return this.prisma.learnerAttendance.update({
       where: { id },

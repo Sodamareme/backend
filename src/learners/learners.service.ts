@@ -28,9 +28,19 @@ export class LearnersService {
     return date.toISOString().split('T')[0];
   }
 
+  private isPastOrCurrentAttendanceDay(date: Date): boolean {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const comparedDate = new Date(date);
+    comparedDate.setHours(0, 0, 0, 0);
+
+    return comparedDate.getTime() <= today.getTime();
+  }
+
   private isInstructionDay(date: Date): boolean {
     const day = date.getDay();
-    return day !== 0 && day !== 6;
+    return day !== 0 && day !== 6 && this.isPastOrCurrentAttendanceDay(date);
   }
 
   // ==========================================
