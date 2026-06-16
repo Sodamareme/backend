@@ -43,6 +43,41 @@ export class LearnersService {
     return day !== 0 && day !== 6 && this.isPastOrCurrentAttendanceDay(date);
   }
 
+  private normalizeAttendanceBoundary(date: Date): Date {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate;
+  }
+
+  private getReplacementAttendanceStartDate(learner: {
+    status: LearnerStatus;
+    createdAt: Date;
+    statusHistory?: Array<{
+      newStatus: LearnerStatus;
+      date: Date;
+    }>;
+  }): Date | null {
+    if (learner.status !== LearnerStatus.REPLACEMENT) {
+      return null;
+    }
+
+    const replacementHistory = learner.statusHistory
+      ?.filter((entry) => entry.newStatus === LearnerStatus.REPLACEMENT)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+
+    return this.normalizeAttendanceBoundary(
+      replacementHistory?.date ?? learner.createdAt,
+    );
+  }
+
+  private isAttendanceOnOrAfterStart(date: Date, startDate: Date | null): boolean {
+    if (!startDate) {
+      return true;
+    }
+
+    return this.normalizeAttendanceBoundary(date).getTime() >= startDate.getTime();
+  }
+
   // ==========================================
   // CRÉATION D'UN APPRENANT
   // ==========================================
@@ -1133,7 +1168,34 @@ export class LearnersService {
   }
 
   async getAttendanceStats(id: string) {
-    const learner = await this.findOne(id);
+    const learner = await this.prisma.learner.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        promotionId: true,
+        refId: true,
+        statusHistory: {
+          where: {
+            newStatus: LearnerStatus.REPLACEMENT,
+          },
+          orderBy: {
+            date: 'asc',
+          },
+          select: {
+            date: true,
+            newStatus: true,
+          },
+        },
+      },
+    });
+
+    if (!learner) {
+      throw new NotFoundException('Apprenant non trouvé');
+    }
+
+    const replacementStartDate = this.getReplacementAttendanceStartDate(learner);
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
@@ -1165,12 +1227,19 @@ export class LearnersService {
 
     const expectedDays = new Set(
       cohortAttendanceRecords
-        .filter((record) => this.isInstructionDay(record.date))
+        .filter(
+          (record) =>
+            this.isInstructionDay(record.date) &&
+            this.isAttendanceOnOrAfterStart(record.date, replacementStartDate),
+        )
         .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     const learnerAttendanceRecords = cohortAttendanceRecords.filter(
-      (record) => record.learnerId === id && this.isInstructionDay(record.date)
+      (record) =>
+        record.learnerId === id &&
+        this.isInstructionDay(record.date) &&
+        this.isAttendanceOnOrAfterStart(record.date, replacementStartDate),
     );
 
     const attendedDays = new Set(
@@ -1353,6 +1422,18 @@ export class LearnersService {
     const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
       include: {
+        statusHistory: {
+          where: {
+            newStatus: LearnerStatus.REPLACEMENT,
+          },
+          orderBy: {
+            date: 'asc',
+          },
+          select: {
+            date: true,
+            newStatus: true,
+          },
+        },
         referential: {
           select: {
             id: true,
@@ -1370,6 +1451,8 @@ export class LearnersService {
     if (!learner) {
       throw new NotFoundException(`Apprenant ${learnerId} introuvable`);
     }
+
+    const replacementStartDate = this.getReplacementAttendanceStartDate(learner);
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
@@ -1415,7 +1498,11 @@ export class LearnersService {
     const learnerRecordsByDay = new Map<string, (typeof cohortAttendanceRecords)[number]>();
 
     for (const record of cohortAttendanceRecords) {
-      if (record.learnerId !== learnerId || !this.isInstructionDay(record.date)) {
+      if (
+        record.learnerId !== learnerId ||
+        !this.isInstructionDay(record.date) ||
+        !this.isAttendanceOnOrAfterStart(record.date, replacementStartDate)
+      ) {
         continue;
       }
 
@@ -1443,7 +1530,11 @@ export class LearnersService {
     const expectedDates = Array.from(
       new Set(
         cohortAttendanceRecords
-          .filter((record) => this.isInstructionDay(record.date))
+          .filter(
+            (record) =>
+              this.isInstructionDay(record.date) &&
+              this.isAttendanceOnOrAfterStart(record.date, replacementStartDate),
+          )
           .map((record) => this.getAttendanceDayKey(record.date))
       ),
     );
