@@ -12,7 +12,8 @@ import {
   HttpStatus,
   InternalServerErrorException,
   Logger,
-  Patch
+  Patch,
+  Delete
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -90,6 +91,49 @@ export class AttendanceController {
       }
     }
     return this.attendanceService.submitAbsenceJustification(id, justification, date, documentUrl);
+  }
+
+  @Put('absence/:id/justify')
+  @Roles(UserRole.APPRENANT)
+  @UseInterceptors(FileInterceptor('document'))
+  @ApiOperation({ summary: 'Modifier une justification d\'absence en attente' })
+  @ApiConsumes('multipart/form-data')
+  async updateJustification(
+    @Param('id') id: string,
+    @Body('justification') justification: string,
+    @Body('date') date?: string,
+    @Body('removeExistingDocument') removeExistingDocument?: string,
+    @UploadedFile() document?: Express.Multer.File,
+  ) {
+    let documentUrl: string | undefined;
+
+    if (document) {
+      try {
+        const uploadResult = await this.cloudinaryService.uploadFile(document, 'justifications');
+        documentUrl = uploadResult.url;
+      } catch (error) {
+        this.logger.error(`Failed to upload justification document: ${error.message}`);
+        throw new InternalServerErrorException('Failed to upload document');
+      }
+    }
+
+    return this.attendanceService.updateAbsenceJustification(
+      id,
+      justification,
+      date,
+      documentUrl,
+      removeExistingDocument === 'true',
+    );
+  }
+
+  @Delete('absence/:id/justify')
+  @Roles(UserRole.APPRENANT)
+  @ApiOperation({ summary: 'Supprimer une justification d\'absence en attente' })
+  async deleteJustification(
+    @Param('id') id: string,
+    @Body('date') date?: string,
+  ) {
+    return this.attendanceService.deleteAbsenceJustification(id, date);
   }
 
   @Put('absence/:id/status')

@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import { AbsenceStatus, LearnerAttendance } from '@prisma/client';
 import { LearnerScanResponse, CoachScanResponse } from './interfaces/scan-response.interface';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class AttendanceService {
@@ -11,7 +12,8 @@ export class AttendanceService {
 
   constructor(
     private prisma: PrismaService,
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    private cloudinaryService: CloudinaryService
   ) {}
 
   private getAnalyticsDateRange(period: 'week' | 'month' | 'quarter' = 'month') {
@@ -434,6 +436,76 @@ export class AttendanceService {
     );
 
     return attendance;
+  }
+
+  async updateAbsenceJustification(
+    attendanceId: string,
+    justification: string,
+    date?: string,
+    documentUrl?: string,
+    removeExistingDocument: boolean = false,
+  ) {
+    const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+    this.assertNotFutureAttendanceDate(attendanceRecord.date);
+
+    if (attendanceRecord.status === AbsenceStatus.APPROVED) {
+      throw new BadRequestException('An approved justification cannot be modified');
+    }
+
+    if (!justification.trim() && !documentUrl && !attendanceRecord.documentUrl) {
+      throw new BadRequestException('A justification or a document is required');
+    }
+
+    const shouldDeleteExistingDocument =
+      Boolean(attendanceRecord.documentUrl) &&
+      (removeExistingDocument || Boolean(documentUrl && documentUrl !== attendanceRecord.documentUrl));
+
+    if (shouldDeleteExistingDocument && attendanceRecord.documentUrl) {
+      await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+    }
+
+    const updatedAttendance = await this.prisma.learnerAttendance.update({
+      where: { id: attendanceRecord.id },
+      data: {
+        justification: justification.trim(),
+        documentUrl: removeExistingDocument
+          ? (documentUrl ?? null)
+          : (documentUrl ?? attendanceRecord.documentUrl ?? null),
+        justificationComment: null,
+        status: AbsenceStatus.PENDING,
+      },
+      include: {
+        learner: true,
+      },
+    });
+
+    return updatedAttendance;
+  }
+
+  async deleteAbsenceJustification(attendanceId: string, date?: string) {
+    const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+    this.assertNotFutureAttendanceDate(attendanceRecord.date);
+
+    if (attendanceRecord.status === AbsenceStatus.APPROVED) {
+      throw new BadRequestException('An approved justification cannot be deleted');
+    }
+
+    if (attendanceRecord.documentUrl) {
+      await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+    }
+
+    return this.prisma.learnerAttendance.update({
+      where: { id: attendanceRecord.id },
+      data: {
+        justification: null,
+        documentUrl: null,
+        justificationComment: null,
+        status: AbsenceStatus.TO_JUSTIFY,
+      },
+      include: {
+        learner: true,
+      },
+    });
   }
 
  // Dans attendance.service.ts

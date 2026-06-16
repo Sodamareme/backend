@@ -131,4 +131,38 @@ export class CloudinaryService {
       throw error;
     }
   }
+
+  extractPublicIdFromUrl(url: string): string | null {
+    if (!url || !url.includes('res.cloudinary.com')) {
+      return null;
+    }
+
+    const uploadMarker = '/upload/';
+    const uploadIndex = url.indexOf(uploadMarker);
+
+    if (uploadIndex === -1) {
+      return null;
+    }
+
+    let publicPath = url.slice(uploadIndex + uploadMarker.length);
+    publicPath = publicPath.replace(/^v\d+\//, '');
+
+    const extensionIndex = publicPath.lastIndexOf('.');
+    if (extensionIndex !== -1) {
+      publicPath = publicPath.slice(0, extensionIndex);
+    }
+
+    return publicPath || null;
+  }
+
+  async deleteFileByUrl(url: string): Promise<void> {
+    const publicId = this.extractPublicIdFromUrl(url);
+
+    if (!publicId) {
+      this.logger.warn(`⚠️ Could not extract Cloudinary public ID from URL: ${url}`);
+      return;
+    }
+
+    await this.deleteFile(publicId);
+  }
 }
