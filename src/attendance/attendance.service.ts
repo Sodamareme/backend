@@ -461,7 +461,15 @@ export class AttendanceService {
       (removeExistingDocument || Boolean(documentUrl && documentUrl !== attendanceRecord.documentUrl));
 
     if (shouldDeleteExistingDocument && attendanceRecord.documentUrl) {
-      await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+      try {
+        await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete existing justification document for attendance ${attendanceRecord.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     const updatedAttendance = await this.prisma.learnerAttendance.update({
@@ -491,7 +499,15 @@ export class AttendanceService {
     }
 
     if (attendanceRecord.documentUrl) {
-      await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+      try {
+        await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete justification document for attendance ${attendanceRecord.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     return this.prisma.learnerAttendance.update({
