@@ -131,7 +131,7 @@ export class AttendanceController {
   @ApiOperation({ summary: 'Supprimer une justification d\'absence en attente' })
   async deleteJustification(
     @Param('id') id: string,
-    @Body('date') date?: string,
+    @Query('date') date?: string,
   ) {
     return this.attendanceService.deleteAbsenceJustification(id, date);
   }
