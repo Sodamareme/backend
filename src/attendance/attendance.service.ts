@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Cron } from '@nestjs/schedule';
-import { AbsenceStatus, LearnerAttendance } from '@prisma/client';
+import { AbsenceStatus, LearnerAttendance, LearnerStatus } from '@prisma/client';
 import { LearnerScanResponse, CoachScanResponse } from './interfaces/scan-response.interface';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -39,6 +39,39 @@ export class AttendanceService {
     }
 
     return { startDate, endDate };
+  }
+
+  private getAttendanceDayKey(date: Date): string {
+    return date.toISOString().split('T')[0];
+  }
+
+  private isPastOrCurrentAttendanceDay(date: Date): boolean {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const comparedDate = new Date(date);
+    comparedDate.setHours(0, 0, 0, 0);
+
+    return comparedDate.getTime() <= today.getTime();
+  }
+
+  private isInstructionDay(date: Date): boolean {
+    const day = date.getDay();
+    return day !== 0 && day !== 6 && this.isPastOrCurrentAttendanceDay(date);
+  }
+
+  private normalizeAttendanceBoundary(date: Date): Date {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate;
+  }
+
+  private isAttendanceOnOrAfterStart(date: Date, startDate: Date | null): boolean {
+    if (!startDate) {
+      return true;
+    }
+
+    return this.normalizeAttendanceBoundary(date).getTime() >= startDate.getTime();
   }
 
   private getTodayStart(): Date {
@@ -995,6 +1028,44 @@ async getDailyStats(date: string, referentialId?: string) {
       },
     });
 
+    const replacementLearnerIds = learners
+      .filter((learner) => learner.status === LearnerStatus.REPLACEMENT)
+      .map((learner) => learner.id);
+
+    const firstReplacementScans = replacementLearnerIds.length > 0
+      ? await this.prisma.learnerAttendance.findMany({
+          where: {
+            learnerId: {
+              in: replacementLearnerIds,
+            },
+            scanTime: {
+              not: null,
+            },
+          },
+          orderBy: [
+            { learnerId: 'asc' },
+            { scanTime: 'asc' },
+          ],
+          select: {
+            learnerId: true,
+            scanTime: true,
+            date: true,
+          },
+        })
+      : [];
+
+    const replacementStartDates = new Map<string, Date>();
+    firstReplacementScans.forEach((scan) => {
+      if (replacementStartDates.has(scan.learnerId)) {
+        return;
+      }
+
+      replacementStartDates.set(
+        scan.learnerId,
+        this.normalizeAttendanceBoundary(scan.scanTime ?? scan.date),
+      );
+    });
+
     const learnersMap = new Map<string, {
       learnerId: string;
       firstName: string;
@@ -1007,6 +1078,7 @@ async getDailyStats(date: string, referentialId?: string) {
       lateCount: number;
       presentCount: number;
       totalRecords: number;
+      expectedDays: number;
       attendedDays: Set<string>;
       attendanceRate: number;
     }>(
@@ -1028,14 +1100,17 @@ async getDailyStats(date: string, referentialId?: string) {
           lateCount: 0,
           presentCount: 0,
           totalRecords: 0,
+          expectedDays: 0,
           attendedDays: new Set<string>(),
           attendanceRate: 0,
         },
       ])
     );
 
-    const expectedDays = new Set(
-      attendanceRecords.map((record) => record.date.toISOString().split('T')[0])
+    const cohortExpectedDays = new Set(
+      attendanceRecords
+        .filter((record) => this.isInstructionDay(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date))
     );
 
     attendanceRecords.forEach((record) => {
@@ -1044,9 +1119,18 @@ async getDailyStats(date: string, referentialId?: string) {
         return;
       }
 
+      if (!this.isInstructionDay(record.date)) {
+        return;
+      }
+
+      const learnerStartDate = replacementStartDates.get(record.learnerId) ?? null;
+      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+        return;
+      }
+
       existingLearner.totalRecords += 1;
 
-      const dateKey = record.date.toISOString().split('T')[0];
+      const dateKey = this.getAttendanceDayKey(record.date);
 
       if (record.isPresent) {
         existingLearner.attendedDays.add(dateKey);
@@ -1061,10 +1145,33 @@ async getDailyStats(date: string, referentialId?: string) {
       }
     });
 
+    learners.forEach((learner) => {
+      const existingLearner = learnersMap.get(learner.id);
+      if (!existingLearner) {
+        return;
+      }
+
+      if (learner.status === LearnerStatus.REPLACEMENT) {
+        const learnerStartDate = replacementStartDates.get(learner.id);
+        if (!learnerStartDate) {
+          existingLearner.expectedDays = 0;
+          return;
+        }
+
+        existingLearner.expectedDays = Array.from(cohortExpectedDays).filter((dayKey) => {
+          const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
+          return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
+        }).length;
+        return;
+      }
+
+      existingLearner.expectedDays = cohortExpectedDays.size;
+    });
+
     const learnersWithStats = Array.from(learnersMap.values()).map((learner) => {
-      const inferredAbsenceCount = Math.max(expectedDays.size - learner.attendedDays.size, 0);
-      const attendanceRate = expectedDays.size > 0
-        ? Number(((learner.attendedDays.size / expectedDays.size) * 100).toFixed(2))
+      const inferredAbsenceCount = Math.max(learner.expectedDays - learner.attendedDays.size, 0);
+      const attendanceRate = learner.expectedDays > 0
+        ? Number(((learner.attendedDays.size / learner.expectedDays) * 100).toFixed(2))
         : 0;
 
       return {
@@ -1112,7 +1219,7 @@ async getDailyStats(date: string, referentialId?: string) {
         referentialId: params.referentialId || null,
         limit,
       },
-      expectedDays: expectedDays.size,
+      expectedDays: cohortExpectedDays.size,
       mostAbsent,
       mostLate,
     };
