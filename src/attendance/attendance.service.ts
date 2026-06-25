@@ -32,23 +32,27 @@ export class AttendanceService {
   private getAnalyticsDateRange(
     period: "week" | "month" | "quarter" = "month",
   ) {
-    const endDate = new Date();
+    const now = new Date();
+    const endDate = new Date(now);
     endDate.setHours(23, 59, 59, 999);
 
-    const startDate = new Date(endDate);
+    const startDate = new Date(now);
     startDate.setHours(0, 0, 0, 0);
 
     switch (period) {
-      case "week":
-        startDate.setDate(startDate.getDate() - 6);
+      case "week": {
+        const day = startDate.getDay();
+        const diffToMonday = day === 0 ? 6 : day - 1;
+        startDate.setDate(startDate.getDate() - diffToMonday);
         break;
-      case "quarter":
-        startDate.setMonth(startDate.getMonth() - 3);
-        startDate.setDate(1);
+      }
+      case "quarter": {
+        const quarterStartMonth = Math.floor(startDate.getMonth() / 3) * 3;
+        startDate.setMonth(quarterStartMonth, 1);
         break;
+      }
       case "month":
       default:
-        startDate.setMonth(startDate.getMonth() - 1);
         startDate.setDate(1);
         break;
     }
@@ -1194,15 +1198,11 @@ export class AttendanceService {
       ]),
     );
 
-    const cohortExpectedDays = new Set<string>();
-    const currentDate = new Date(startDate);
-
-    while (currentDate <= endDate) {
-      if (this.isInstructionDay(currentDate)) {
-        cohortExpectedDays.add(this.getAttendanceDayKey(currentDate));
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    const cohortExpectedDays = new Set(
+      attendanceRecords
+        .filter((record) => this.isInstructionDay(record.date))
+        .map((record) => this.getAttendanceDayKey(record.date)),
+    );
 
     const attendanceByLearnerDay = new Map<
       string,
