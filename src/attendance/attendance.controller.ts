@@ -214,6 +214,17 @@ export class AttendanceController {
     return this.attendanceService.getYearlyStats(parseInt(year, 10));
   }
 
+  @Get('records')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
+  @ApiOperation({ summary: 'Get attendance records between two dates' })
+  async getAttendanceRecords(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('referentialId') referentialId?: string,
+  ) {
+    return this.attendanceService.getAttendanceRecords(startDate, endDate, referentialId);
+  }
+
   @Get('stats/at-risk-learners')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get learners with the highest absence and late counts' })

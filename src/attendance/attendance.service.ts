@@ -1053,6 +1053,74 @@ export class AttendanceService {
     return { months };
   }
 
+  async getAttendanceRecords(
+    startDate: string,
+    endDate: string,
+    referentialId?: string,
+  ) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BadRequestException("Invalid attendance range");
+    }
+
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const records = await this.prisma.learnerAttendance.findMany({
+      where: {
+        date: {
+          gte: start,
+          lte: end,
+        },
+        learner: {
+          status: {
+            in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+          },
+          ...(referentialId ? { refId: referentialId } : {}),
+        },
+      },
+      include: {
+        learner: {
+          include: {
+            referential: true,
+          },
+        },
+      },
+      orderBy: [
+        { date: "desc" },
+        { updatedAt: "desc" },
+      ],
+    });
+
+    return records.map((record) => ({
+      id: record.id,
+      date: record.date.toISOString(),
+      scanTime: record.scanTime?.toISOString() || null,
+      isPresent: record.isPresent,
+      isLate: record.isLate,
+      status: record.status || "PENDING",
+      justification: record.justification || null,
+      documentUrl: record.documentUrl || null,
+      justificationComment: record.justificationComment || null,
+      learner: {
+        id: record.learner.id,
+        firstName: record.learner.firstName,
+        lastName: record.learner.lastName,
+        matricule: record.learner.matricule,
+        photoUrl: record.learner.photoUrl,
+        address: record.learner.address,
+        referential: record.learner.referential
+          ? {
+              id: record.learner.referential.id,
+              name: record.learner.referential.name,
+            }
+          : undefined,
+      },
+    }));
+  }
+
   async getAtRiskLearners(params: {
     period?: "week" | "month" | "quarter";
     promotionId?: string;
