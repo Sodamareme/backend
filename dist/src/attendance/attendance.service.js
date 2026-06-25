@@ -16,11 +16,69 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const schedule_1 = require("@nestjs/schedule");
 const client_1 = require("@prisma/client");
 const notifications_service_1 = require("../notifications/notifications.service");
+const cloudinary_service_1 = require("../cloudinary/cloudinary.service");
 let AttendanceService = AttendanceService_1 = class AttendanceService {
-    constructor(prisma, notificationsService) {
+    constructor(prisma, notificationsService, cloudinaryService) {
         this.prisma = prisma;
         this.notificationsService = notificationsService;
+        this.cloudinaryService = cloudinaryService;
         this.logger = new common_1.Logger(AttendanceService_1.name);
+    }
+    getAnalyticsDateRange(period = 'month') {
+        const endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+        const startDate = new Date(endDate);
+        startDate.setHours(0, 0, 0, 0);
+        switch (period) {
+            case 'week':
+                startDate.setDate(startDate.getDate() - 6);
+                break;
+            case 'quarter':
+                startDate.setMonth(startDate.getMonth() - 3);
+                startDate.setDate(1);
+                break;
+            case 'month':
+            default:
+                startDate.setMonth(startDate.getMonth() - 1);
+                startDate.setDate(1);
+                break;
+        }
+        return { startDate, endDate };
+    }
+    getAttendanceDayKey(date) {
+        return date.toISOString().split('T')[0];
+    }
+    isPastOrCurrentAttendanceDay(date) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const comparedDate = new Date(date);
+        comparedDate.setHours(0, 0, 0, 0);
+        return comparedDate.getTime() <= today.getTime();
+    }
+    isInstructionDay(date) {
+        const day = date.getDay();
+        return day !== 0 && day !== 6 && this.isPastOrCurrentAttendanceDay(date);
+    }
+    normalizeAttendanceBoundary(date) {
+        const normalizedDate = new Date(date);
+        normalizedDate.setHours(0, 0, 0, 0);
+        return normalizedDate;
+    }
+    isAttendanceOnOrAfterStart(date, startDate) {
+        if (!startDate) {
+            return true;
+        }
+        return this.normalizeAttendanceBoundary(date).getTime() >= startDate.getTime();
+    }
+    getTodayStart() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return today;
+    }
+    assertNotFutureAttendanceDate(date) {
+        if (date.getTime() > this.getTodayStart().getTime()) {
+            throw new common_1.BadRequestException('Future attendance dates are not allowed');
+        }
     }
     normalizeAttendanceDate(date) {
         const attendanceDate = new Date(date);
@@ -28,6 +86,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             throw new common_1.BadRequestException('Invalid attendance date');
         }
         attendanceDate.setHours(0, 0, 0, 0);
+        this.assertNotFutureAttendanceDate(attendanceDate);
         return attendanceDate;
     }
     async resolveLearnerAttendanceRecord(attendanceId, date) {
@@ -43,12 +102,16 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             if (!attendance) {
                 throw new common_1.NotFoundException('Attendance record not found');
             }
+            this.assertNotFutureAttendanceDate(attendance.date);
             return attendance;
         }
         if (!date) {
             throw new common_1.BadRequestException('A date is required to update a generated absence record');
         }
-        const learnerId = attendanceId.replace('absent-', '');
+        const generatedAbsenceMatch = attendanceId.match(/^absent-(.+)-(\d{4}-\d{2}-\d{2})$/);
+        const learnerId = generatedAbsenceMatch
+            ? generatedAbsenceMatch[1]
+            : attendanceId.replace('absent-', '');
         const attendanceDate = this.normalizeAttendanceDate(date);
         const existingAttendance = await this.prisma.learnerAttendance.findFirst({
             where: {
@@ -306,9 +369,11 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
             }
         };
     }
-    async submitAbsenceJustification(attendanceId, justification, documentUrl) {
+    async submitAbsenceJustification(attendanceId, justification, date, documentUrl) {
+        const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+        this.assertNotFutureAttendanceDate(attendanceRecord.date);
         const attendance = await this.prisma.learnerAttendance.update({
-            where: { id: attendanceId },
+            where: { id: attendanceRecord.id },
             data: {
                 justification,
                 documentUrl,
@@ -318,11 +383,74 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                 learner: true
             }
         });
-        await this.notificationsService.createJustificationNotification(attendanceId, attendance.learnerId, `${attendance.learner.firstName} ${attendance.learner.lastName} a soumis une justification ${attendance.isLate ? 'de retard' : 'd\'absence'}`);
+        await this.notificationsService.createJustificationNotification(attendance.id, attendance.learnerId, `${attendance.learner.firstName} ${attendance.learner.lastName} a soumis une justification ${attendance.isLate ? 'de retard' : 'd\'absence'}`);
         return attendance;
+    }
+    async updateAbsenceJustification(attendanceId, justification, date, documentUrl, removeExistingDocument = false) {
+        const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+        this.assertNotFutureAttendanceDate(attendanceRecord.date);
+        if (attendanceRecord.status === client_1.AbsenceStatus.APPROVED) {
+            throw new common_1.BadRequestException('An approved justification cannot be modified');
+        }
+        if (!justification.trim() && !documentUrl && !attendanceRecord.documentUrl) {
+            throw new common_1.BadRequestException('A justification or a document is required');
+        }
+        const shouldDeleteExistingDocument = Boolean(attendanceRecord.documentUrl) &&
+            (removeExistingDocument || Boolean(documentUrl && documentUrl !== attendanceRecord.documentUrl));
+        if (shouldDeleteExistingDocument && attendanceRecord.documentUrl) {
+            try {
+                await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+            }
+            catch (error) {
+                this.logger.warn(`Failed to delete existing justification document for attendance ${attendanceRecord.id}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        const updatedAttendance = await this.prisma.learnerAttendance.update({
+            where: { id: attendanceRecord.id },
+            data: {
+                justification: justification.trim(),
+                documentUrl: removeExistingDocument
+                    ? (documentUrl ?? null)
+                    : (documentUrl ?? attendanceRecord.documentUrl ?? null),
+                justificationComment: null,
+                status: client_1.AbsenceStatus.PENDING,
+            },
+            include: {
+                learner: true,
+            },
+        });
+        return updatedAttendance;
+    }
+    async deleteAbsenceJustification(attendanceId, date) {
+        const attendanceRecord = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+        this.assertNotFutureAttendanceDate(attendanceRecord.date);
+        if (attendanceRecord.status === client_1.AbsenceStatus.APPROVED) {
+            throw new common_1.BadRequestException('An approved justification cannot be deleted');
+        }
+        if (attendanceRecord.documentUrl) {
+            try {
+                await this.cloudinaryService.deleteFileByUrl(attendanceRecord.documentUrl);
+            }
+            catch (error) {
+                this.logger.warn(`Failed to delete justification document for attendance ${attendanceRecord.id}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        return this.prisma.learnerAttendance.update({
+            where: { id: attendanceRecord.id },
+            data: {
+                justification: null,
+                documentUrl: null,
+                justificationComment: null,
+                status: client_1.AbsenceStatus.TO_JUSTIFY,
+            },
+            include: {
+                learner: true,
+            },
+        });
     }
     async updateAbsenceStatus(attendanceId, status, comment, date) {
         const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+        this.assertNotFutureAttendanceDate(attendance.date);
         if (attendance.status === client_1.AbsenceStatus.APPROVED && status === client_1.AbsenceStatus.APPROVED) {
             throw new common_1.BadRequestException('This justification is already approved');
         }
@@ -347,6 +475,7 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
     }
     async forceApprove(attendanceId, date) {
         const attendance = await this.resolveLearnerAttendanceRecord(attendanceId, date);
+        this.assertNotFutureAttendanceDate(attendance.date);
         const updated = await this.prisma.learnerAttendance.update({
             where: { id: attendance.id },
             data: {
@@ -651,6 +780,209 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         }
         return { months };
     }
+    async getAtRiskLearners(params) {
+        const period = params.period || 'month';
+        const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 20) : 5;
+        const { startDate, endDate } = this.getAnalyticsDateRange(period);
+        const learners = await this.prisma.learner.findMany({
+            where: {
+                status: {
+                    in: ['ACTIVE', 'REPLACEMENT'],
+                },
+                ...(params.promotionId ? { promotionId: params.promotionId } : {}),
+                ...(params.referentialId ? { refId: params.referentialId } : {}),
+            },
+            include: {
+                promotion: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                referential: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
+        if (learners.length === 0) {
+            return {
+                period,
+                range: {
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString(),
+                },
+                filters: {
+                    promotionId: params.promotionId || null,
+                    referentialId: params.referentialId || null,
+                    limit,
+                },
+                expectedDays: 0,
+                mostAbsent: [],
+                mostLate: [],
+            };
+        }
+        const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+            where: {
+                date: {
+                    gte: startDate,
+                    lte: endDate,
+                },
+                learnerId: {
+                    in: learners.map((learner) => learner.id),
+                },
+            },
+        });
+        const replacementLearnerIds = learners
+            .filter((learner) => learner.status === client_1.LearnerStatus.REPLACEMENT)
+            .map((learner) => learner.id);
+        const firstReplacementScans = replacementLearnerIds.length > 0
+            ? await this.prisma.learnerAttendance.findMany({
+                where: {
+                    learnerId: {
+                        in: replacementLearnerIds,
+                    },
+                    scanTime: {
+                        not: null,
+                    },
+                },
+                orderBy: [
+                    { learnerId: 'asc' },
+                    { scanTime: 'asc' },
+                ],
+                select: {
+                    learnerId: true,
+                    scanTime: true,
+                    date: true,
+                },
+            })
+            : [];
+        const replacementStartDates = new Map();
+        firstReplacementScans.forEach((scan) => {
+            if (replacementStartDates.has(scan.learnerId)) {
+                return;
+            }
+            replacementStartDates.set(scan.learnerId, this.normalizeAttendanceBoundary(scan.scanTime ?? scan.date));
+        });
+        const learnersMap = new Map(learners.map((learner) => [
+            learner.id,
+            {
+                learnerId: learner.id,
+                firstName: learner.firstName,
+                lastName: learner.lastName,
+                matricule: learner.matricule,
+                photoUrl: learner.photoUrl,
+                promotion: learner.promotion
+                    ? { id: learner.promotion.id, name: learner.promotion.name }
+                    : null,
+                referential: learner.referential
+                    ? { id: learner.referential.id, name: learner.referential.name }
+                    : null,
+                absenceCount: 0,
+                lateCount: 0,
+                presentCount: 0,
+                totalRecords: 0,
+                expectedDays: 0,
+                attendedDays: new Set(),
+                attendanceRate: 0,
+            },
+        ]));
+        const cohortExpectedDays = new Set(attendanceRecords
+            .filter((record) => this.isInstructionDay(record.date))
+            .map((record) => this.getAttendanceDayKey(record.date)));
+        attendanceRecords.forEach((record) => {
+            const existingLearner = learnersMap.get(record.learnerId);
+            if (!existingLearner) {
+                return;
+            }
+            if (!this.isInstructionDay(record.date)) {
+                return;
+            }
+            const learnerStartDate = replacementStartDates.get(record.learnerId) ?? null;
+            if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+                return;
+            }
+            existingLearner.totalRecords += 1;
+            const dateKey = this.getAttendanceDayKey(record.date);
+            if (record.isPresent) {
+                existingLearner.attendedDays.add(dateKey);
+            }
+            if (record.isLate) {
+                existingLearner.lateCount += 1;
+            }
+            if (record.isPresent) {
+                existingLearner.presentCount += 1;
+            }
+        });
+        learners.forEach((learner) => {
+            const existingLearner = learnersMap.get(learner.id);
+            if (!existingLearner) {
+                return;
+            }
+            if (learner.status === client_1.LearnerStatus.REPLACEMENT) {
+                const learnerStartDate = replacementStartDates.get(learner.id);
+                if (!learnerStartDate) {
+                    existingLearner.expectedDays = 0;
+                    return;
+                }
+                existingLearner.expectedDays = Array.from(cohortExpectedDays).filter((dayKey) => {
+                    const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
+                    return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
+                }).length;
+                return;
+            }
+            existingLearner.expectedDays = cohortExpectedDays.size;
+        });
+        const learnersWithStats = Array.from(learnersMap.values()).map((learner) => {
+            const inferredAbsenceCount = Math.max(learner.expectedDays - learner.attendedDays.size, 0);
+            const attendanceRate = learner.expectedDays > 0
+                ? Number(((learner.attendedDays.size / learner.expectedDays) * 100).toFixed(2))
+                : 0;
+            return {
+                learnerId: learner.learnerId,
+                firstName: learner.firstName,
+                lastName: learner.lastName,
+                matricule: learner.matricule,
+                photoUrl: learner.photoUrl,
+                promotion: learner.promotion,
+                referential: learner.referential,
+                absenceCount: inferredAbsenceCount,
+                lateCount: learner.lateCount,
+                presentCount: learner.presentCount,
+                totalRecords: learner.totalRecords,
+                attendanceRate,
+            };
+        });
+        const mostAbsent = [...learnersWithStats]
+            .sort((a, b) => b.absenceCount - a.absenceCount ||
+            b.lateCount - a.lateCount ||
+            a.attendanceRate - b.attendanceRate)
+            .filter((learner) => learner.absenceCount > 0)
+            .slice(0, limit);
+        const mostLate = [...learnersWithStats]
+            .sort((a, b) => b.lateCount - a.lateCount ||
+            b.absenceCount - a.absenceCount ||
+            a.attendanceRate - b.attendanceRate)
+            .filter((learner) => learner.lateCount > 0)
+            .slice(0, limit);
+        return {
+            period,
+            range: {
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+            },
+            filters: {
+                promotionId: params.promotionId || null,
+                referentialId: params.referentialId || null,
+                limit,
+            },
+            expectedDays: cohortExpectedDays.size,
+            mostAbsent,
+            mostLate,
+        };
+    }
     async getWeeklyStats(year) {
         try {
             const startDate = new Date(year, 0, 1);
@@ -811,6 +1143,10 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         }
     }
     async markAbsentees() {
+        if (process.env.READ_ONLY_MODE === 'true') {
+            this.logger.log('READ_ONLY_MODE enabled, skipping markAbsentees cron job');
+            return;
+        }
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -848,12 +1184,37 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
         }
     }
     async getAttendanceByLearner(learnerId) {
-        return this.prisma.learnerAttendance.findMany({
-            where: {
-                learnerId: learnerId
+        const learner = await this.prisma.learner.findUnique({
+            where: { id: learnerId },
+            include: {
+                referential: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
             },
-            orderBy: {
-                date: 'desc'
+        });
+        if (!learner) {
+            throw new common_1.NotFoundException(`Apprenant ${learnerId} introuvable`);
+        }
+        const cohortLearners = await this.prisma.learner.findMany({
+            where: {
+                promotionId: learner.promotionId,
+                ...(learner.refId ? { refId: learner.refId } : {}),
+                status: {
+                    in: ['ACTIVE', 'REPLACEMENT'],
+                },
+            },
+            select: {
+                id: true,
+            },
+        });
+        const cohortAttendanceRecords = await this.prisma.learnerAttendance.findMany({
+            where: {
+                learnerId: {
+                    in: cohortLearners.map((cohortLearner) => cohortLearner.id),
+                },
             },
             include: {
                 learner: {
@@ -864,19 +1225,52 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                         photoUrl: true,
                         referential: {
                             select: {
-                                name: true
-                            }
-                        }
-                    }
-                }
-            }
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                date: 'desc',
+            },
         });
+        const learnerRecords = cohortAttendanceRecords.filter((record) => record.learnerId === learnerId);
+        const learnerDates = new Set(learnerRecords.map((record) => record.date.toISOString().split('T')[0]));
+        const expectedDates = Array.from(new Set(cohortAttendanceRecords.map((record) => record.date.toISOString().split('T')[0])));
+        const generatedAbsentRecords = expectedDates
+            .filter((dateKey) => !learnerDates.has(dateKey))
+            .map((dateKey) => ({
+            id: `absent-${learnerId}`,
+            learnerId,
+            date: new Date(dateKey),
+            scanTime: null,
+            isPresent: false,
+            isLate: false,
+            status: client_1.AbsenceStatus.TO_JUSTIFY,
+            justification: null,
+            documentUrl: null,
+            justificationComment: null,
+            learner: {
+                firstName: learner.firstName,
+                lastName: learner.lastName,
+                matricule: learner.matricule,
+                photoUrl: learner.photoUrl,
+                referential: learner.referential
+                    ? {
+                        name: learner.referential.name,
+                    }
+                    : null,
+            },
+        }));
+        return [...learnerRecords, ...generatedAbsentRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     async updateAttendanceStatus(id, status, date) {
         const isPresent = status !== 'absent';
         const isLate = status === 'late';
         if (id.startsWith('absent-')) {
             const attendance = await this.resolveLearnerAttendanceRecord(id, date);
+            this.assertNotFutureAttendanceDate(attendance.date);
             return this.prisma.learnerAttendance.update({
                 where: { id: attendance.id },
                 data: {
@@ -891,6 +1285,14 @@ let AttendanceService = AttendanceService_1 = class AttendanceService {
                 },
             });
         }
+        const existingAttendance = await this.prisma.learnerAttendance.findUnique({
+            where: { id },
+            select: { date: true },
+        });
+        if (!existingAttendance) {
+            throw new common_1.NotFoundException('Attendance record not found');
+        }
+        this.assertNotFutureAttendanceDate(existingAttendance.date);
         return this.prisma.learnerAttendance.update({
             where: { id },
             data: {
@@ -916,6 +1318,7 @@ __decorate([
 exports.AttendanceService = AttendanceService = AttendanceService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        notifications_service_1.NotificationsService])
+        notifications_service_1.NotificationsService,
+        cloudinary_service_1.CloudinaryService])
 ], AttendanceService);
 //# sourceMappingURL=attendance.service.js.map

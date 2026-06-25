@@ -38,7 +38,7 @@ let AttendanceController = AttendanceController_1 = class AttendanceController {
     async scanCoach(body) {
         return this.attendanceService.scanCoach(body.matricule);
     }
-    async submitJustification(id, justification, document) {
+    async submitJustification(id, justification, date, document) {
         let documentUrl;
         if (document) {
             try {
@@ -50,7 +50,24 @@ let AttendanceController = AttendanceController_1 = class AttendanceController {
                 throw new common_1.InternalServerErrorException('Failed to upload document');
             }
         }
-        return this.attendanceService.submitAbsenceJustification(id, justification, documentUrl);
+        return this.attendanceService.submitAbsenceJustification(id, justification, date, documentUrl);
+    }
+    async updateJustification(id, justification, date, removeExistingDocument, document) {
+        let documentUrl;
+        if (document) {
+            try {
+                const uploadResult = await this.cloudinaryService.uploadFile(document, 'justifications');
+                documentUrl = uploadResult.url;
+            }
+            catch (error) {
+                this.logger.error(`Failed to upload justification document: ${error.message}`);
+                throw new common_1.InternalServerErrorException('Failed to upload document');
+            }
+        }
+        return this.attendanceService.updateAbsenceJustification(id, justification, date, documentUrl, removeExistingDocument === 'true');
+    }
+    async deleteJustification(id, date) {
+        return this.attendanceService.deleteAbsenceJustification(id, date);
     }
     async updateAbsenceStatus(id, updateStatusDto) {
         return this.attendanceService.updateAbsenceStatus(id, updateStatusDto.status, updateStatusDto.comment, updateStatusDto.date);
@@ -77,6 +94,14 @@ let AttendanceController = AttendanceController_1 = class AttendanceController {
     }
     async getYearlyStats(year) {
         return this.attendanceService.getYearlyStats(parseInt(year, 10));
+    }
+    async getAtRiskLearners(period, promotionId, referentialId, limit) {
+        return this.attendanceService.getAtRiskLearners({
+            period,
+            promotionId,
+            referentialId,
+            limit: limit ? parseInt(limit, 10) : undefined,
+        });
     }
     async getWeeklyStats(year) {
         return this.attendanceService.getWeeklyStats(parseInt(year, 10));
@@ -128,11 +153,37 @@ __decorate([
     (0, swagger_1.ApiConsumes)('multipart/form-data'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)('justification')),
-    __param(2, (0, common_1.UploadedFile)()),
+    __param(2, (0, common_1.Body)('date')),
+    __param(3, (0, common_1.UploadedFile)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:paramtypes", [String, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], AttendanceController.prototype, "submitJustification", null);
+__decorate([
+    (0, common_1.Put)('absence/:id/justify'),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.APPRENANT),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('document')),
+    (0, swagger_1.ApiOperation)({ summary: 'Modifier une justification d\'absence en attente' }),
+    (0, swagger_1.ApiConsumes)('multipart/form-data'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)('justification')),
+    __param(2, (0, common_1.Body)('date')),
+    __param(3, (0, common_1.Body)('removeExistingDocument')),
+    __param(4, (0, common_1.UploadedFile)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, Object]),
+    __metadata("design:returntype", Promise)
+], AttendanceController.prototype, "updateJustification", null);
+__decorate([
+    (0, common_1.Delete)('absence/:id/justify'),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.APPRENANT),
+    (0, swagger_1.ApiOperation)({ summary: 'Supprimer une justification d\'absence en attente' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Query)('date')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AttendanceController.prototype, "deleteJustification", null);
 __decorate([
     (0, common_1.Put)('absence/:id/status'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.COACH),
@@ -205,6 +256,22 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], AttendanceController.prototype, "getYearlyStats", null);
+__decorate([
+    (0, common_1.Get)('stats/at-risk-learners'),
+    (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: 'Get learners with the highest absence and late counts' }),
+    (0, swagger_1.ApiQuery)({ name: 'period', required: false, example: 'month' }),
+    (0, swagger_1.ApiQuery)({ name: 'promotionId', required: false }),
+    (0, swagger_1.ApiQuery)({ name: 'referentialId', required: false }),
+    (0, swagger_1.ApiQuery)({ name: 'limit', required: false, example: 5 }),
+    __param(0, (0, common_1.Query)('period')),
+    __param(1, (0, common_1.Query)('promotionId')),
+    __param(2, (0, common_1.Query)('referentialId')),
+    __param(3, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], AttendanceController.prototype, "getAtRiskLearners", null);
 __decorate([
     (0, common_1.Get)('stats/weekly'),
     (0, roles_decorator_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.COACH, client_1.UserRole.SURVEILLANT, client_1.UserRole.VIGIL),
