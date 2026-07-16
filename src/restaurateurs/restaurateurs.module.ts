@@ -6,9 +6,10 @@ import { MealScansService } from './meal-scans.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { VigilsModule } from '../vigils/vigils.module';
+import { EventsModule } from '../events/events.module';
 
 @Module({
-  imports: [PrismaModule, CloudinaryModule, VigilsModule],
+  imports: [PrismaModule, CloudinaryModule, VigilsModule, EventsModule],
   controllers: [RestaurateursController, MealScansController],
   providers: [RestaurateursService, MealScansService],
   exports: [RestaurateursService, MealScansService],

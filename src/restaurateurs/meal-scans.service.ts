@@ -9,6 +9,7 @@ import { CreateMealScanDto } from './dto/CreateMealScanDto';
 import { MealType, Prisma } from '@prisma/client';
 import { SyncMealScansDto } from './dto/SyncMealScansDto';
 import { randomUUID } from 'crypto';
+import { EventsService, EVENT_TYPE_HOLIDAY } from '../events/events.service';
 
 type SyncMealScanResult = {
   localId: string;
@@ -44,7 +45,10 @@ type ZonedDateParts = {
 
 @Injectable()
 export class MealScansService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventsService: EventsService,
+  ) {}
 
   private static readonly DEFAULT_TIMEZONE = 'Africa/Dakar';
   private static readonly BREAKFAST_START_MINUTES = 6 * 60;
@@ -325,10 +329,71 @@ export class MealScansService {
     return error.message;
   }
 
+  private normalizeDay(date: Date) {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate;
+  }
+
+  private async getReferentialAttendanceClosure(refId?: string | null) {
+    if (!refId) {
+      return null;
+    }
+
+    const rows = await this.prisma.$queryRaw<Array<{ attendanceClosedAt: Date | null }>>(
+      Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${refId} LIMIT 1`,
+    );
+
+    return rows[0]?.attendanceClosedAt ?? null;
+  }
+
+  private async assertMealScanAllowed(
+    learner: {
+      refId?: string | null;
+      promotionId?: string | null;
+    },
+    serviceDate: Date,
+  ) {
+    const attendanceClosedAt = await this.getReferentialAttendanceClosure(
+      learner.refId,
+    );
+
+    if (attendanceClosedAt) {
+      const closedAt = this.normalizeDay(attendanceClosedAt);
+      const targetDate = this.normalizeDay(serviceDate);
+
+      if (targetDate.getTime() >= closedAt.getTime()) {
+        throw new BadRequestException(
+          "Ce référentiel est clôturé. Aucun pointage n'est autorisé.",
+        );
+      }
+    }
+
+    if (!learner.promotionId) {
+      return;
+    }
+
+    const blockingEvent = await this.eventsService.getBlockingEventForPromotionDate(
+      learner.promotionId,
+      serviceDate,
+      'meal',
+    );
+
+    if (blockingEvent?.type === EVENT_TYPE_HOLIDAY) {
+      throw new BadRequestException(
+        "Aujourd'hui est un jour férié. Aucun pointage repas n'est autorisé.",
+      );
+    }
+  }
+
   private async createMealScan(scan: MealScanCreateInput, restaurateurId: string) {
     const learner = await this.prisma.learner.findUnique({
       where: { id: scan.learnerId },
-      select: { id: true },
+      select: {
+        id: true,
+        refId: true,
+        promotionId: true,
+      },
     });
 
     if (!learner) {
@@ -341,6 +406,7 @@ export class MealScansService {
     const { startOfDay, endOfDay } = this.getScanWindow(scan);
     const timezone = this.getTimezoneOrDefault(scan.timezone);
 
+    await this.assertMealScanAllowed(learner, serviceDate);
     this.validateMealWindow(scan, scannedAt, timezone);
 
     if (clientScanId) {

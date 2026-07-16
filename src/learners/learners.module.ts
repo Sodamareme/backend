@@ -7,8 +7,9 @@ import { EmailModule } from '../../src/email/email.module';
 import { EmailService } from '@/email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { EventsModule } from '../events/events.module';
 @Module({
-  imports: [CloudinaryModule,EmailModule],
+  imports: [CloudinaryModule, EmailModule, EventsModule],
   providers: [LearnersService, PrismaService, CloudinaryService],
   controllers: [LearnersController],
   exports: [LearnersService],

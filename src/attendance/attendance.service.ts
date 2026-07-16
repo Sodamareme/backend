@@ -19,6 +19,11 @@ import {
 } from "./interfaces/scan-response.interface";
 import { NotificationsService } from "../notifications/notifications.service";
 import { CloudinaryService } from "../cloudinary/cloudinary.service";
+import {
+  EventsService,
+  EVENT_TYPE_HOLIDAY,
+  EVENT_TYPE_NO_CLASS,
+} from "../events/events.service";
 
 @Injectable()
 export class AttendanceService {
@@ -28,6 +33,7 @@ export class AttendanceService {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private cloudinaryService: CloudinaryService,
+    private eventsService: EventsService,
   ) {}
 
   private getAnalyticsDateRange(
@@ -102,11 +108,14 @@ export class AttendanceService {
   private isLearnerExpectedForAttendanceOnDate(
     learner: {
       refId?: string | null;
+      promotionId?: string | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
     targetDate: Date,
+    blockedAttendanceDaysByPromotion?: Map<string, Set<string>>,
   ): boolean {
     const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
+    const targetDayKey = this.getAttendanceDayKey(normalizedTargetDate);
 
     const attendanceClosedAt =
       learner.refId && referentialAttendanceClosures.has(learner.refId)
@@ -123,6 +132,16 @@ export class AttendanceService {
         normalizedAttendanceClosedAt.getTime()
     ) {
       return false;
+    }
+
+    if (learner.promotionId) {
+      const blockedDates = blockedAttendanceDaysByPromotion?.get(
+        learner.promotionId,
+      );
+
+      if (blockedDates?.has(targetDayKey)) {
+        return false;
+      }
     }
 
     return true;
@@ -142,6 +161,50 @@ export class AttendanceService {
     );
 
     return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+  }
+
+  private async getLearnerAttendanceBlockReason(
+    learner: {
+      promotionId?: string | null;
+      refId?: string | null;
+    },
+    targetDate: Date,
+  ): Promise<string | null> {
+    const referentialAttendanceClosures =
+      await this.getReferentialAttendanceClosures(
+        learner.refId ? [learner.refId] : [],
+      );
+
+    const isReferentialClosed =
+      !this.isLearnerExpectedForAttendanceOnDate(
+        learner,
+        referentialAttendanceClosures,
+        targetDate,
+      );
+
+    if (isReferentialClosed) {
+      return "Ce référentiel est clôturé. Aucun pointage n'est autorisé.";
+    }
+
+    if (!learner.promotionId) {
+      return null;
+    }
+
+    const blockingEvent = await this.eventsService.getBlockingEventForPromotionDate(
+      learner.promotionId,
+      targetDate,
+      "attendance",
+    );
+
+    if (blockingEvent?.type === EVENT_TYPE_HOLIDAY) {
+      return "Aujourd'hui est un jour férié. Aucun pointage n'est autorisé.";
+    }
+
+    if (blockingEvent?.type === EVENT_TYPE_NO_CLASS) {
+      return "Aujourd'hui est un jour sans cours. Le pointage de présence est désactivé.";
+    }
+
+    return null;
   }
 
   private getTodayStart(): Date {
@@ -290,6 +353,15 @@ export class AttendanceService {
 
     // 2. Traiter l'apprenant s'il existe
     if (learner) {
+      const attendanceBlockReason = await this.getLearnerAttendanceBlockReason(
+        learner,
+        today,
+      );
+
+      if (attendanceBlockReason) {
+        throw new BadRequestException(attendanceBlockReason);
+      }
+
       // Vérifier si déjà scanné
       if (learner.attendances && learner.attendances.length > 0) {
         const existingAttendance = learner.attendances[0];
@@ -431,6 +503,14 @@ export class AttendanceService {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const attendanceBlockReason = await this.getLearnerAttendanceBlockReason(
+      learner,
+      today,
+    );
+
+    if (attendanceBlockReason) {
+      throw new BadRequestException(attendanceBlockReason);
+    }
 
     const existingAttendance = await this.prisma.learnerAttendance.findFirst({
       where: {
@@ -849,6 +929,7 @@ export class AttendanceService {
           photoUrl: true,
           address: true,
           refId: true,
+          promotionId: true,
           referential: {
             select: {
               id: true,
@@ -860,12 +941,27 @@ export class AttendanceService {
 
       const referentialAttendanceClosures =
         await this.getReferentialAttendanceClosures([referentialId]);
+      const promotionIds = Array.from(
+        new Set(
+          learners
+            .map((learner) => learner.promotionId)
+            .filter((promotionId): promotionId is string => Boolean(promotionId)),
+        ),
+      );
+      const blockedAttendanceDaysByPromotion =
+        await this.eventsService.getBlockedDateKeysByPromotion(
+          promotionIds,
+          targetDate,
+          targetDate,
+          "attendance",
+        );
 
       const expectedLearners = learners.filter((learner) =>
         this.isLearnerExpectedForAttendanceOnDate(
           learner,
           referentialAttendanceClosures,
           targetDate,
+          blockedAttendanceDaysByPromotion,
         ),
       );
 
@@ -967,12 +1063,27 @@ export class AttendanceService {
 
       const referentialAttendanceClosures =
         await this.getReferentialAttendanceClosures(referentialIds);
+      const promotionIds = Array.from(
+        new Set(
+          allLearners
+            .map((learner) => learner.promotionId)
+            .filter((promotionId): promotionId is string => Boolean(promotionId)),
+        ),
+      );
+      const blockedAttendanceDaysByPromotion =
+        await this.eventsService.getBlockedDateKeysByPromotion(
+          promotionIds,
+          targetDate,
+          targetDate,
+          "attendance",
+        );
 
       const expectedLearners = allLearners.filter((learner) =>
         this.isLearnerExpectedForAttendanceOnDate(
           learner,
           referentialAttendanceClosures,
           targetDate,
+          blockedAttendanceDaysByPromotion,
         ),
       );
 
@@ -980,10 +1091,16 @@ export class AttendanceService {
       const whereClause: any = { date: targetDate };
       if (referentialId) whereClause.learner = { refId: referentialId };
 
-      const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+      const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
         where: whereClause,
         include: { learner: { include: { referential: true } } },
       });
+      const expectedLearnerIds = new Set(
+        expectedLearners.map((learner) => learner.id),
+      );
+      const attendanceRecords = rawAttendanceRecords.filter((record) =>
+        expectedLearnerIds.has(record.learnerId),
+      );
 
       // ✅ 3. Construire un map des pointages par learnerId
       const attendanceMap = new Map(
@@ -1243,6 +1360,23 @@ export class AttendanceService {
     );
     const referentialAttendanceClosures =
       await this.getReferentialAttendanceClosures(referentialIds);
+    const learnerPromotionIds = new Map(
+      learners.map((learner) => [learner.id, learner.promotionId ?? null]),
+    );
+    const promotionIds = Array.from(
+      new Set(
+        learners
+          .map((learner) => learner.promotionId)
+          .filter((promotionId): promotionId is string => Boolean(promotionId)),
+      ),
+    );
+    const blockedAttendanceDaysByPromotion =
+      await this.eventsService.getBlockedDateKeysByPromotion(
+        promotionIds,
+        startDate,
+        endDate,
+        "attendance",
+      );
     const activeLearners = learners.filter((learner) =>
       this.isLearnerExpectedForAttendanceOnDate(
         learner,
@@ -1363,7 +1497,18 @@ export class AttendanceService {
 
     const cohortExpectedDays = new Set(
       attendanceRecords
-        .filter((record) => this.isInstructionDay(record.date))
+        .filter((record) => {
+          if (!this.isInstructionDay(record.date)) {
+            return false;
+          }
+
+          const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
+          const blockedDays = learnerPromotionId
+            ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
+            : undefined;
+
+          return !blockedDays?.has(this.getAttendanceDayKey(record.date));
+        })
         .map((record) => this.getAttendanceDayKey(record.date)),
     );
 
@@ -1379,6 +1524,15 @@ export class AttendanceService {
       }
 
       if (!this.isInstructionDay(record.date)) {
+        return;
+      }
+
+      const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
+      const blockedDays = learnerPromotionId
+        ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
+        : undefined;
+
+      if (blockedDays?.has(this.getAttendanceDayKey(record.date))) {
         return;
       }
 
@@ -1825,8 +1979,21 @@ export class AttendanceService {
         },
       });
 
+    const blockedAttendanceDays = await this.eventsService.getBlockedDateKeysByPromotion(
+      learner.promotionId ? [learner.promotionId] : [],
+      cohortAttendanceRecords.length > 0
+        ? cohortAttendanceRecords[cohortAttendanceRecords.length - 1].date
+        : new Date(),
+      cohortAttendanceRecords[0]?.date ?? new Date(),
+      "attendance",
+    );
+    const learnerBlockedDays =
+      blockedAttendanceDays.get(learner.promotionId ?? "") ?? new Set<string>();
+
     const learnerRecords = cohortAttendanceRecords.filter(
-      (record) => record.learnerId === learnerId,
+      (record) =>
+        record.learnerId === learnerId &&
+        !learnerBlockedDays.has(this.getAttendanceDayKey(record.date)),
     );
     const learnerDates = new Set(
       learnerRecords.map((record) => record.date.toISOString().split("T")[0]),
@@ -1834,9 +2001,9 @@ export class AttendanceService {
 
     const expectedDates = Array.from(
       new Set(
-        cohortAttendanceRecords.map(
-          (record) => record.date.toISOString().split("T")[0],
-        ),
+        cohortAttendanceRecords
+          .map((record) => record.date.toISOString().split("T")[0])
+          .filter((dateKey) => !learnerBlockedDays.has(dateKey)),
       ),
     );
 

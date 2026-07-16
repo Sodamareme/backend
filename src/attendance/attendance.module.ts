@@ -5,13 +5,15 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     CloudinaryModule,
     PrismaModule,
-    NotificationsModule
+    NotificationsModule,
+    EventsModule,
   ],
   providers: [AttendanceService],
   controllers: [AttendanceController],

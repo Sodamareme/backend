@@ -13,6 +13,7 @@ import { BulkImportResponseDto, ValidationError } from './dto/BulkImportResponse
 import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { EmailService } from '../email/email.service';
 import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
+import { EventsService } from '../events/events.service';
 
 @Injectable()
 export class LearnersService {
@@ -22,6 +23,7 @@ export class LearnersService {
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
     private emailService: EmailService,
+    private eventsService: EventsService,
   ) {}
 
   private getAttendanceDayKey(date: Date): string {
@@ -41,6 +43,27 @@ export class LearnersService {
   private isInstructionDay(date: Date): boolean {
     const day = date.getDay();
     return day !== 0 && day !== 6 && this.isPastOrCurrentAttendanceDay(date);
+  }
+
+  private async getBlockedAttendanceDayKeys(
+    promotionId: string | null | undefined,
+    dates: Date[],
+  ): Promise<Set<string>> {
+    if (!promotionId || dates.length === 0) {
+      return new Set<string>();
+    }
+
+    const timestamps = dates.map((date) => this.normalizeAttendanceBoundary(date).getTime());
+    const startDate = new Date(Math.min(...timestamps));
+    const endDate = new Date(Math.max(...timestamps));
+    const blockedByPromotion = await this.eventsService.getBlockedDateKeysByPromotion(
+      [promotionId],
+      startDate,
+      endDate,
+      'attendance',
+    );
+
+    return blockedByPromotion.get(promotionId) ?? new Set<string>();
   }
 
   private normalizeAttendanceBoundary(date: Date): Date {
@@ -1249,12 +1272,18 @@ export class LearnersService {
       },
     });
 
+    const blockedAttendanceDays = await this.getBlockedAttendanceDayKeys(
+      learner.promotionId,
+      cohortAttendanceRecords.map((record) => record.date),
+    );
+
     const expectedDays = attendanceWindow.shouldCountAttendance
       ? new Set(
           cohortAttendanceRecords
             .filter(
               (record) =>
                 this.isInstructionDay(record.date) &&
+                !blockedAttendanceDays.has(this.getAttendanceDayKey(record.date)) &&
                 this.isAttendanceOnOrAfterStart(record.date, attendanceWindow.startDate),
             )
             .map((record) => this.getAttendanceDayKey(record.date))
@@ -1266,6 +1295,7 @@ export class LearnersService {
           (record) =>
             record.learnerId === id &&
             this.isInstructionDay(record.date) &&
+            !blockedAttendanceDays.has(this.getAttendanceDayKey(record.date)) &&
             this.isAttendanceOnOrAfterStart(record.date, attendanceWindow.startDate),
         )
       : [];
@@ -1556,6 +1586,11 @@ export class LearnersService {
       learnerRecords.map((record) => this.getAttendanceDayKey(record.date)),
     );
 
+    const blockedAttendanceDays = await this.getBlockedAttendanceDayKeys(
+      learner.promotionId,
+      cohortAttendanceRecords.map((record) => record.date),
+    );
+
     const expectedDates = attendanceWindow.shouldCountAttendance
       ? Array.from(
           new Set(
@@ -1563,6 +1598,7 @@ export class LearnersService {
               .filter(
                 (record) =>
                   this.isInstructionDay(record.date) &&
+                  !blockedAttendanceDays.has(this.getAttendanceDayKey(record.date)) &&
                   this.isAttendanceOnOrAfterStart(record.date, attendanceWindow.startDate),
               )
               .map((record) => this.getAttendanceDayKey(record.date))

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -59,5 +60,13 @@ export class EventsController {
   @ApiOperation({ summary: 'Mettre à jour un événement' })
   async update(@Param('id') id: string, @Body() data: any) {
     return this.eventsService.update(id, data);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Supprimer un événement' })
+  async delete(@Param('id') id: string) {
+    await this.eventsService.delete(id);
+    return { success: true };
   }
 }
