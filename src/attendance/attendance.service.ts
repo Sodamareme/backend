@@ -113,7 +113,15 @@ export class AttendanceService {
         ? referentialAttendanceClosures.get(learner.refId)
       : null;
 
-    if (attendanceClosedAt && normalizedTargetDate.getTime() >= attendanceClosedAt.getTime()) {
+    const normalizedAttendanceClosedAt = attendanceClosedAt
+      ? this.normalizeAttendanceBoundary(attendanceClosedAt)
+      : null;
+
+    if (
+      normalizedAttendanceClosedAt &&
+      normalizedTargetDate.getTime() >=
+        normalizedAttendanceClosedAt.getTime()
+    ) {
       return false;
     }
 
