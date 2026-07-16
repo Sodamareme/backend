@@ -11,6 +11,7 @@ import {
   AbsenceStatus,
   LearnerAttendance,
   LearnerStatus,
+  Prisma,
 } from "@prisma/client";
 import {
   LearnerScanResponse,
@@ -96,6 +97,43 @@ export class AttendanceService {
     return (
       this.normalizeAttendanceBoundary(date).getTime() >= startDate.getTime()
     );
+  }
+
+  private isLearnerExpectedForAttendanceOnDate(
+    learner: {
+      refId?: string | null;
+    },
+    referentialAttendanceClosures: Map<string, Date | null>,
+    targetDate: Date,
+  ): boolean {
+    const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
+
+    const attendanceClosedAt =
+      learner.refId && referentialAttendanceClosures.has(learner.refId)
+        ? referentialAttendanceClosures.get(learner.refId)
+      : null;
+
+    if (attendanceClosedAt && normalizedTargetDate.getTime() >= attendanceClosedAt.getTime()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private async getReferentialAttendanceClosures(
+    referentialIds: string[],
+  ): Promise<Map<string, Date | null>> {
+    if (referentialIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; attendanceClosedAt: Date | null }>
+    >(
+      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(referentialIds)})`,
+    );
+
+    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
   }
 
   private getTodayStart(): Date {
@@ -812,9 +850,20 @@ export class AttendanceService {
         },
       });
 
-      if (!learners.length) {
+      const referentialAttendanceClosures =
+        await this.getReferentialAttendanceClosures([referentialId]);
+
+      const expectedLearners = learners.filter((learner) =>
+        this.isLearnerExpectedForAttendanceOnDate(
+          learner,
+          referentialAttendanceClosures,
+          targetDate,
+        ),
+      );
+
+      if (!expectedLearners.length) {
         this.logger.log(
-          `No active learners found in referential ${referentialId}`,
+          `No expected learners found in referential ${referentialId} for ${date}`,
         );
         return {
           date: targetDate.toISOString(),
@@ -832,7 +881,7 @@ export class AttendanceService {
       // 2️⃣ Récupère les présences du jour UNIQUEMENT pour ces apprenants
       const attendances = await this.prisma.learnerAttendance.findMany({
         where: {
-          learnerId: { in: learners.map((l) => l.id) },
+        learnerId: { in: expectedLearners.map((l) => l.id) },
           date: { gte: targetDate, lt: nextDay },
         },
         select: {
@@ -854,7 +903,7 @@ export class AttendanceService {
       );
 
       // 4️⃣ Filtrer les absents : ceux qui ne sont pas dans presentIds
-      const absents = learners.filter((l) => !presentIds.has(l.id));
+      const absents = expectedLearners.filter((l) => !presentIds.has(l.id));
 
       this.logger.log(
         `Total absents for referential ${referentialId}: ${absents.length}`,
@@ -895,8 +944,29 @@ export class AttendanceService {
 
       const allLearners = await this.prisma.learner.findMany({
         where: learnersWhere,
-        include: { referential: true },
+        include: {
+          referential: true,
+        },
       });
+
+      const referentialIds = Array.from(
+        new Set(
+          allLearners
+            .map((learner) => learner.refId)
+            .filter((refId): refId is string => Boolean(refId)),
+        ),
+      );
+
+      const referentialAttendanceClosures =
+        await this.getReferentialAttendanceClosures(referentialIds);
+
+      const expectedLearners = allLearners.filter((learner) =>
+        this.isLearnerExpectedForAttendanceOnDate(
+          learner,
+          referentialAttendanceClosures,
+          targetDate,
+        ),
+      );
 
       // ✅ 2. Récupérer les pointages du jour
       const whereClause: any = { date: targetDate };
@@ -913,7 +983,7 @@ export class AttendanceService {
       );
 
       // ✅ 4. Générer les absences pour les apprenants sans pointage
-      const absentRecords = allLearners
+      const absentRecords = expectedLearners
         .filter((l) => !attendanceMap.has(l.id))
         .map((l) => ({
           id: `absent-${l.id}`,
@@ -971,7 +1041,7 @@ export class AttendanceService {
       const present = allRecords.filter((r) => r.isPresent && !r.isLate).length;
       const late = allRecords.filter((r) => r.isPresent && r.isLate).length;
       const absent = allRecords.filter((r) => !r.isPresent).length;
-      const total = allLearners.length;
+      const total = expectedLearners.length;
 
       return { present, late, absent, total, attendance: allRecords };
     } catch (error) {
@@ -1156,7 +1226,24 @@ export class AttendanceService {
       },
     });
 
-    if (learners.length === 0) {
+    const referentialIds = Array.from(
+      new Set(
+        learners
+          .map((learner) => learner.refId)
+          .filter((refId): refId is string => Boolean(refId)),
+      ),
+    );
+    const referentialAttendanceClosures =
+      await this.getReferentialAttendanceClosures(referentialIds);
+    const activeLearners = learners.filter((learner) =>
+      this.isLearnerExpectedForAttendanceOnDate(
+        learner,
+        referentialAttendanceClosures,
+        endDate,
+      ),
+    );
+
+    if (activeLearners.length === 0) {
       return {
         period,
         range: {
@@ -1181,12 +1268,12 @@ export class AttendanceService {
           lte: endDate,
         },
         learnerId: {
-          in: learners.map((learner) => learner.id),
+          in: activeLearners.map((learner) => learner.id),
         },
       },
     });
 
-    const replacementLearnerIds = learners
+    const replacementLearnerIds = activeLearners
       .filter((learner) => learner.status === LearnerStatus.REPLACEMENT)
       .map((learner) => learner.id);
 
@@ -1241,7 +1328,7 @@ export class AttendanceService {
         attendanceRate: number;
       }
     >(
-      learners.map((learner) => [
+      activeLearners.map((learner) => [
         learner.id,
         {
           learnerId: learner.id,
@@ -1328,7 +1415,7 @@ export class AttendanceService {
       }
     });
 
-    learners.forEach((learner) => {
+    activeLearners.forEach((learner) => {
       const existingLearner = learnersMap.get(learner.id);
       if (!existingLearner) {
         return;

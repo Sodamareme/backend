@@ -137,7 +137,7 @@ export class ReferentialsController {
   @Put(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Mettre à jour un référentiel' })
-  async update(@Param('id') id: string, @Body() data: Partial<CreateReferentialDto>) {
+  async update(@Param('id') id: string, @Body() data: Partial<CreateReferentialDto> & { attendanceClosedAt?: string | null }) {
     // Ensure we have at least one valid field to update
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('Aucune donnée fournie pour la mise à jour');

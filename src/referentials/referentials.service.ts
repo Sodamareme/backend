@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Referential } from '@prisma/client';
+import { Prisma, Referential } from '@prisma/client';
 import { CreateReferentialDto } from './dto/create-referential.dto';
 import { ReferentialWithRelations } from './interfaces/referential.interface';
 import { ReferentialStats, SessionStats } from './interfaces/referential-stats.interface';
@@ -8,6 +8,18 @@ import { ReferentialStats, SessionStats } from './interfaces/referential-stats.i
 @Injectable()
 export class ReferentialsService {
   constructor(private prisma: PrismaService) {}
+
+  private async getAttendanceClosedAtMap(ids: string[]) {
+    if (!ids.length) {
+      return new Map<string, Date | null>();
+    }
+
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; attendanceClosedAt: Date | null }>>(
+      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(ids)})`
+    );
+
+    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+  }
 
   async create(data: CreateReferentialDto): Promise<Referential> {
     const { numberOfSessions, sessionLength, ...referentialData } = data;
@@ -56,13 +68,22 @@ export class ReferentialsService {
   }
 
   async findAll(): Promise<Referential[]> {
-    return this.prisma.referential.findMany({
+    const referentials = await this.prisma.referential.findMany({
       include: {
         learners: true,
         coaches: true,
         modules: true,
       },
     });
+
+    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap(
+      referentials.map((referential) => referential.id),
+    );
+
+    return referentials.map((referential) => ({
+      ...referential,
+      attendanceClosedAt: attendanceClosedAtMap.get(referential.id) ?? null,
+    })) as Referential[];
   }
 
    async findAllReferentials(): Promise<Referential[]> {
@@ -91,21 +112,49 @@ export class ReferentialsService {
       throw new NotFoundException('Référentiel non trouvé');
     }
 
-    return referential;
+    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+
+    return {
+      ...referential,
+      attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+    } as ReferentialWithRelations;
   }
 
-  async update(id: string, data: Partial<Referential>): Promise<Referential> {
-    const referential = await this.findOne(id);
+  async update(id: string, data: Prisma.ReferentialUpdateInput & { attendanceClosedAt?: Date | string | null }): Promise<Referential> {
+    await this.findOne(id);
 
-    return this.prisma.referential.update({
+    const { attendanceClosedAt, ...referentialData } = data;
+
+    if (attendanceClosedAt !== undefined) {
+      const normalizedAttendanceClosedAt =
+        attendanceClosedAt === null
+          ? null
+          : new Date(attendanceClosedAt as string | Date);
+
+      await this.prisma.$executeRaw(
+        Prisma.sql`UPDATE "Referential" SET "attendanceClosedAt" = ${normalizedAttendanceClosedAt}, "updatedAt" = NOW() WHERE id = ${id}`
+      );
+    }
+
+    const updatedReferential = await this.prisma.referential.update({
       where: { id },
-      data,
+      data: referentialData,
       include: {
         learners: true,
         coaches: true,
         modules: true,
       },
     });
+
+    return {
+      ...updatedReferential,
+      attendanceClosedAt:
+        attendanceClosedAt === undefined
+          ? (await this.getAttendanceClosedAtMap([id])).get(id) ?? null
+          : attendanceClosedAt === null
+            ? null
+            : new Date(attendanceClosedAt as string | Date),
+    } as Referential;
   }
 
   async getStatistics(id: string): Promise<ReferentialStats> {

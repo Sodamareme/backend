@@ -232,6 +232,7 @@ model Referential {
   description      String?
   photoUrl         String?
   capacity         Int
+  attendanceClosedAt DateTime?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   numberOfSessions Int         @default(1)
