@@ -105,6 +105,24 @@ export class AttendanceService {
     );
   }
 
+  private getLearnerAnalyticsStartDate(
+    learner: {
+      createdAt?: Date | null;
+      status: LearnerStatus;
+    },
+    replacementStartDate?: Date | null,
+  ): Date | null {
+    if (learner.status === LearnerStatus.REPLACEMENT) {
+      return replacementStartDate ?? null;
+    }
+
+    if (!learner.createdAt) {
+      return null;
+    }
+
+    return this.normalizeAttendanceBoundary(learner.createdAt);
+  }
+
   private isLearnerExpectedForAttendanceOnDate(
     learner: {
       refId?: string | null;
@@ -205,6 +223,53 @@ export class AttendanceService {
     }
 
     return null;
+  }
+
+  private async getFilteredLearnerAttendanceRecords<
+    T extends {
+      learnerId: string;
+      date: Date;
+      learner?: { promotionId?: string | null };
+    },
+  >(records: T[]): Promise<T[]> {
+    if (records.length === 0) {
+      return records;
+    }
+
+    const learnerPromotionIds = new Map<string, string | null>();
+    const promotionIds = new Set<string>();
+    const timestamps = records.map((record) =>
+      this.normalizeAttendanceBoundary(record.date).getTime(),
+    );
+
+    records.forEach((record) => {
+      const promotionId = record.learner?.promotionId ?? null;
+      learnerPromotionIds.set(record.learnerId, promotionId);
+      if (promotionId) {
+        promotionIds.add(promotionId);
+      }
+    });
+
+    const blockedAttendanceDaysByPromotion =
+      await this.eventsService.getBlockedDateKeysByPromotion(
+        Array.from(promotionIds),
+        new Date(Math.min(...timestamps)),
+        new Date(Math.max(...timestamps)),
+        "attendance",
+      );
+
+    return records.filter((record) => {
+      if (!this.isInstructionDay(record.date)) {
+        return false;
+      }
+
+      const promotionId = learnerPromotionIds.get(record.learnerId);
+      const blockedDays = promotionId
+        ? blockedAttendanceDaysByPromotion.get(promotionId)
+        : undefined;
+
+      return !blockedDays?.has(this.getAttendanceDayKey(record.date));
+    });
   }
 
   private getTodayStart(): Date {
@@ -1182,17 +1247,27 @@ export class AttendanceService {
     const endDate = new Date(year, month, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+    const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
       where: {
         date: {
           gte: startDate,
           lte: endDate,
         },
       },
+      include: {
+        learner: {
+          select: {
+            promotionId: true,
+          },
+        },
+      },
       orderBy: {
         date: "asc",
       },
     });
+    const attendanceRecords = await this.getFilteredLearnerAttendanceRecords(
+      rawAttendanceRecords,
+    );
 
     const days = [];
     let currentDate = new Date(startDate);
@@ -1222,14 +1297,24 @@ export class AttendanceService {
     const endDate = new Date(year, 11, 31);
     endDate.setHours(23, 59, 59, 999);
 
-    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+    const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
       where: {
         date: {
           gte: startDate,
           lte: endDate,
         },
       },
+      include: {
+        learner: {
+          select: {
+            promotionId: true,
+          },
+        },
+      },
     });
+    const attendanceRecords = await this.getFilteredLearnerAttendanceRecords(
+      rawAttendanceRecords,
+    );
 
     const months = [];
     for (let month = 0; month < 12; month++) {
@@ -1263,7 +1348,7 @@ export class AttendanceService {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
-    const records = await this.prisma.learnerAttendance.findMany({
+    const rawRecords = await this.prisma.learnerAttendance.findMany({
       where: {
         date: {
           gte: start,
@@ -1278,6 +1363,9 @@ export class AttendanceService {
       },
       include: {
         learner: {
+          select: {
+            promotionId: true,
+          },
           include: {
             referential: true,
           },
@@ -1288,6 +1376,7 @@ export class AttendanceService {
         { updatedAt: "desc" },
       ],
     });
+    const records = await this.getFilteredLearnerAttendanceRecords(rawRecords);
 
     return records.map((record) => ({
       id: record.id,
@@ -1536,8 +1625,16 @@ export class AttendanceService {
         return;
       }
 
-      const learnerStartDate =
-        replacementStartDates.get(record.learnerId) ?? null;
+      const learnerData = activeLearners.find(
+        (learner) => learner.id === record.learnerId,
+      );
+      const learnerStartDate = learnerData
+        ? this.getLearnerAnalyticsStartDate(
+            learnerData,
+            replacementStartDates.get(record.learnerId) ?? null,
+          )
+        : null;
+
       if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
         return;
       }
@@ -1583,23 +1680,22 @@ export class AttendanceService {
         return;
       }
 
-      if (learner.status === LearnerStatus.REPLACEMENT) {
-        const learnerStartDate = replacementStartDates.get(learner.id);
-        if (!learnerStartDate) {
-          existingLearner.expectedDays = 0;
-          return;
-        }
+      const learnerStartDate = this.getLearnerAnalyticsStartDate(
+        learner,
+        replacementStartDates.get(learner.id) ?? null,
+      );
 
-        existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
-          (dayKey) => {
-            const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
-            return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
-          },
-        ).length;
+      if (!learnerStartDate) {
+        existingLearner.expectedDays = 0;
         return;
       }
 
-      existingLearner.expectedDays = cohortExpectedDays.size;
+      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
+        (dayKey) => {
+          const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
+          return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
+        },
+      ).length;
     });
 
     const learnersWithStats = Array.from(learnersMap.values()).map(
@@ -1680,14 +1776,24 @@ export class AttendanceService {
       const endDate = new Date(year, 11, 31);
       endDate.setHours(23, 59, 59, 999);
 
-      const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+      const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
         where: {
           date: {
             gte: startDate,
             lte: endDate,
           },
         },
+        include: {
+          learner: {
+            select: {
+              promotionId: true,
+            },
+          },
+        },
       });
+      const attendanceRecords = await this.getFilteredLearnerAttendanceRecords(
+        rawAttendanceRecords,
+      );
 
       const weeks = Array.from({ length: 52 }, (_, i) => ({
         weekNumber: i + 1,
@@ -1786,7 +1892,13 @@ export class AttendanceService {
       const promotion = await this.prisma.promotion.findUnique({
         where: { id: promotionId },
         include: {
-          learners: true,
+          learners: {
+            where: {
+              status: {
+                in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+              },
+            },
+          },
         },
       });
 
@@ -1795,6 +1907,15 @@ export class AttendanceService {
       }
 
       const learnerIds = promotion.learners.map((learner) => learner.id);
+      const referentialIds = Array.from(
+        new Set(
+          promotion.learners
+            .map((learner) => learner.refId)
+            .filter((refId): refId is string => Boolean(refId)),
+        ),
+      );
+      const referentialAttendanceClosures =
+        await this.getReferentialAttendanceClosures(referentialIds);
 
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -1802,8 +1923,50 @@ export class AttendanceService {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
-      const attendanceRecords = await this.prisma.learnerAttendance.groupBy({
-        by: ["date"],
+      const replacementLearnerIds = promotion.learners
+        .filter((learner) => learner.status === LearnerStatus.REPLACEMENT)
+        .map((learner) => learner.id);
+      const firstReplacementScans =
+        replacementLearnerIds.length > 0
+          ? await this.prisma.learnerAttendance.findMany({
+              where: {
+                learnerId: {
+                  in: replacementLearnerIds,
+                },
+                scanTime: {
+                  not: null,
+                },
+              },
+              orderBy: [{ learnerId: "asc" }, { scanTime: "asc" }],
+              select: {
+                learnerId: true,
+                scanTime: true,
+                date: true,
+              },
+            })
+          : [];
+      const replacementStartDates = new Map<string, Date>();
+      firstReplacementScans.forEach((scan) => {
+        if (!replacementStartDates.has(scan.learnerId)) {
+          replacementStartDates.set(
+            scan.learnerId,
+            this.normalizeAttendanceBoundary(scan.scanTime ?? scan.date),
+          );
+        }
+      });
+
+      const learnerStartDates = new Map<string, Date | null>();
+      promotion.learners.forEach((learner) => {
+        learnerStartDates.set(
+          learner.id,
+          this.getLearnerAnalyticsStartDate(
+            learner,
+            replacementStartDates.get(learner.id) ?? null,
+          ),
+        );
+      });
+
+      const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
         where: {
           learnerId: { in: learnerIds },
           date: {
@@ -1811,46 +1974,105 @@ export class AttendanceService {
             lte: end,
           },
         },
-        _count: {
-          _all: true,
+        select: {
+          learnerId: true,
+          date: true,
+          isPresent: true,
+          isLate: true,
+          updatedAt: true,
         },
       });
+      const blockedAttendanceDays =
+        await this.eventsService.getBlockedDateKeysByPromotion(
+          [promotionId],
+          start,
+          end,
+          "attendance",
+        );
+      const promotionBlockedDays =
+        blockedAttendanceDays.get(promotionId) ?? new Set<string>();
+      const attendanceByLearnerDay = new Map<
+        string,
+        (typeof rawAttendanceRecords)[number]
+      >();
 
-      const results = await Promise.all(
-        attendanceRecords.map(async (record) => {
-          const dateAttendance = await this.prisma.learnerAttendance.groupBy({
-            by: ["isPresent", "isLate"],
-            where: {
-              learnerId: { in: learnerIds },
-              date: record.date,
-            },
-            _count: true,
-          });
+      rawAttendanceRecords.forEach((record) => {
+        if (
+          !this.isInstructionDay(record.date) ||
+          promotionBlockedDays.has(this.getAttendanceDayKey(record.date))
+        ) {
+          return;
+        }
 
-          const stats = {
-            date: record.date.toISOString().split("T")[0],
-            presentCount: 0,
-            lateCount: 0,
-            absentCount: 0,
-          };
+        const learnerStartDate = learnerStartDates.get(record.learnerId) ?? null;
+        if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+          return;
+        }
 
-          dateAttendance.forEach((attendance) => {
-            if (attendance.isPresent && !attendance.isLate) {
-              stats.presentCount = attendance._count;
-            } else if (attendance.isPresent && attendance.isLate) {
-              stats.lateCount = attendance._count;
-            } else {
-              stats.absentCount = attendance._count;
-            }
-          });
+        const mapKey = `${record.learnerId}:${this.getAttendanceDayKey(record.date)}`;
+        const existingRecord = attendanceByLearnerDay.get(mapKey);
+        const recordTimestamp =
+          record.updatedAt?.getTime?.() ?? record.date.getTime();
+        const existingTimestamp =
+          existingRecord?.updatedAt?.getTime?.() ??
+          existingRecord?.date.getTime?.() ??
+          0;
 
-          const totalLearners = learnerIds.length;
-          const accountedFor = stats.presentCount + stats.lateCount;
-          stats.absentCount = totalLearners - accountedFor;
+        if (!existingRecord || recordTimestamp > existingTimestamp) {
+          attendanceByLearnerDay.set(mapKey, record);
+        }
+      });
 
-          return stats;
-        }),
-      );
+      const attendanceDates = Array.from(
+        new Set(
+          Array.from(attendanceByLearnerDay.values()).map((record) =>
+            this.getAttendanceDayKey(record.date),
+          ),
+        ),
+      )
+        .map((dateKey) => new Date(`${dateKey}T00:00:00.000Z`))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      const results = attendanceDates.map((attendanceDate) => {
+        const dateKey = this.getAttendanceDayKey(attendanceDate);
+        const eligibleLearners = promotion.learners.filter((learner) => {
+          const learnerStartDate = learnerStartDates.get(learner.id) ?? null;
+          return (
+            this.isLearnerExpectedForAttendanceOnDate(
+              learner,
+              referentialAttendanceClosures,
+              attendanceDate,
+            ) &&
+            this.isAttendanceOnOrAfterStart(attendanceDate, learnerStartDate)
+          );
+        });
+
+        let presentCount = 0;
+        let lateCount = 0;
+
+        eligibleLearners.forEach((learner) => {
+          const record = attendanceByLearnerDay.get(`${learner.id}:${dateKey}`);
+          if (!record) {
+            return;
+          }
+
+          if (record.isPresent && !record.isLate) {
+            presentCount += 1;
+          } else if (record.isPresent && record.isLate) {
+            lateCount += 1;
+          }
+        });
+
+        return {
+          date: dateKey,
+          presentCount,
+          lateCount,
+          absentCount: Math.max(
+            eligibleLearners.length - presentCount - lateCount,
+            0,
+          ),
+        };
+      });
 
       results.sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),

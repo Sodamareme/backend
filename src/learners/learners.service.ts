@@ -72,16 +72,19 @@ export class LearnersService {
     return normalizedDate;
   }
 
-  private async getReplacementAttendanceWindow(learner: {
+  private async getLearnerAttendanceWindow(learner: {
     id: string;
     status: LearnerStatus;
+    createdAt?: Date | null;
   }): Promise<{
     startDate: Date | null;
     shouldCountAttendance: boolean;
   }> {
     if (learner.status !== LearnerStatus.REPLACEMENT) {
       return {
-        startDate: null,
+        startDate: learner.createdAt
+          ? this.normalizeAttendanceBoundary(learner.createdAt)
+          : null,
         shouldCountAttendance: true,
       };
     }
@@ -1242,7 +1245,7 @@ export class LearnersService {
       throw new NotFoundException('Apprenant non trouvé');
     }
 
-    const attendanceWindow = await this.getReplacementAttendanceWindow(learner);
+    const attendanceWindow = await this.getLearnerAttendanceWindow(learner);
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
@@ -1510,7 +1513,7 @@ export class LearnersService {
       throw new NotFoundException(`Apprenant ${learnerId} introuvable`);
     }
 
-    const attendanceWindow = await this.getReplacementAttendanceWindow(learner);
+    const attendanceWindow = await this.getLearnerAttendanceWindow(learner);
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
