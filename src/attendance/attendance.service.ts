@@ -1489,6 +1489,7 @@ export class AttendanceService {
         expectedDays: 0,
         mostAbsent: [],
         mostLate: [],
+        mostRegular: [],
       };
     }
 
@@ -1751,6 +1752,17 @@ export class AttendanceService {
       .filter((learner) => learner.lateCount > 0)
       .slice(0, limit);
 
+    const mostRegular = [...learnersWithStats]
+      .sort(
+        (a, b) =>
+          b.attendanceRate - a.attendanceRate ||
+          b.presentCount - a.presentCount ||
+          a.lateCount - b.lateCount ||
+          a.absenceCount - b.absenceCount,
+      )
+      .filter((learner) => learner.presentCount > 0)
+      .slice(0, limit);
+
     return {
       period,
       range: {
@@ -1765,6 +1777,7 @@ export class AttendanceService {
       expectedDays: cohortExpectedDays.size,
       mostAbsent,
       mostLate,
+      mostRegular,
     };
   }
 
