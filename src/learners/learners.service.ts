@@ -136,13 +136,7 @@ export class LearnersService {
     photoFile?: Express.Multer.File,
     existingPhotoUrl?: string,
   ): Promise<Learner> {
-    this.logger.log('=== SERVICE CREATE - données reçues ===');
-    this.logger.log(`firstName: ${createLearnerDto.firstName}`);
-    this.logger.log(`tutor: ${JSON.stringify(createLearnerDto.tutor)}`);
-    this.logger.log(`promotionId: ${createLearnerDto.promotionId}`);
-    this.logger.log(`refId: ${createLearnerDto.refId}`);
-    this.logger.log(`sessionId: ${createLearnerDto.sessionId}`);
-    this.logger.log(`birthDate: ${createLearnerDto.birthDate}`);
+    this.logger.debug('Creating learner');
 
     // ✅ Validation préalable AVANT la transaction pour avoir de vrais messages d'erreur
     await this.validateBeforeCreate(createLearnerDto);
@@ -235,7 +229,7 @@ export class LearnersService {
             throw new BadRequestException('Impossible de générer le matricule');
           }
 
-          this.logger.log(`Matricule généré: ${matricule}`);
+          this.logger.debug('Learner matricule generated');
 
           // 4. Générer le QR code (sans bloquer si erreur)
           let qrCodeUrl: string | undefined;
@@ -261,7 +255,7 @@ export class LearnersService {
 
             const qrCodeResult = await this.cloudinary.uploadFile(qrCodeFile, 'qrcodes');
             qrCodeUrl = qrCodeResult.url;
-            this.logger.log(`QR code uploadé: ${qrCodeUrl}`);
+            this.logger.debug('Learner QR code uploaded');
           } catch (error) {
             this.logger.warn(`QR code génération échouée, on continue sans: ${error.message}`);
           }
@@ -270,14 +264,12 @@ export class LearnersService {
           let photoUrl: string | undefined = existingPhotoUrl;
           if (photoFile) {
             try {
-              this.logger.log(`=== UPLOAD PHOTO === size: ${photoFile.size}, type: ${photoFile.mimetype}`);
+              this.logger.debug('Uploading learner photo');
               const result = await this.cloudinary.uploadFile(photoFile, 'learners');
               photoUrl = result.url;
-              this.logger.log(`=== PHOTO URL === ${photoUrl}`);
+              this.logger.debug('Learner photo uploaded');
             } catch (error) {
-              this.logger.error(`=== PHOTO UPLOAD ÉCHOUÉE ===`);
-              this.logger.error(`Message: ${error.message}`);
-              this.logger.error(`Stack: ${error.stack}`);
+              this.logger.error('Learner photo upload failed');
             }
           }
 
@@ -358,7 +350,7 @@ export class LearnersService {
             },
           });
 
-          this.logger.log(`Apprenant créé: ${learner.id} - ${learner.matricule}`);
+          this.logger.log(`Learner created: ${learner.id}`);
 
           // 9. Historique de statut initial
           await prisma.learnerStatusHistory.create({
@@ -377,7 +369,7 @@ export class LearnersService {
               password,
               'Apprenant',
             );
-            this.logger.log(`Email envoyé à: ${createLearnerDto.email}`);
+            this.logger.debug('Learner onboarding email sent');
           } catch (emailError) {
             this.logger.error('Échec envoi email:', emailError.message);
           }
@@ -415,10 +407,7 @@ export class LearnersService {
       }
 
       // Erreur inconnue — log complet + message lisible
-      this.logger.error('=== ERREUR INATTENDUE CREATE LEARNER ===');
-      this.logger.error(`Type: ${error.constructor.name}`);
-      this.logger.error(`Message: ${error.message}`);
-      this.logger.error(`Stack: ${error.stack}`);
+      this.logger.error(`Unexpected learner creation error: ${error.message}`);
 
       throw new InternalServerErrorException(
         `Erreur lors de la création: ${error.message}`,

@@ -49,6 +49,7 @@ export class UsersController {
       throw new NotFoundException(`User with email ${email} not found`);
     }
     const details = await this.usersService.getUserDetailsByRole(user);
-    return { ...user, details };
+    const { password, ...safeUser } = user;
+    return { ...safeUser, details };
   }
 }

@@ -16,11 +16,7 @@ export class RestaurateursService {
   ) {}
 
   async create(createRestaurateurDto: CreateRestaurateurDto, photoFile?: Express.Multer.File): Promise<Restaurateur> {
-    this.logger.log('Creating restaurateur with data:', {
-      firstName: createRestaurateurDto.firstName,
-      lastName: createRestaurateurDto.lastName,
-      email: createRestaurateurDto.email
-    });
+    this.logger.debug('Creating restaurateur');
 
     const existingRestaurateur = await this.prisma.restaurateur.findFirst({
       where: {
@@ -37,18 +33,15 @@ export class RestaurateursService {
 
     let photoUrl: string | undefined;
     if (photoFile) {
-      this.logger.log('Photo file received, processing...');
+      this.logger.debug('Uploading restaurateur photo');
       
       try {
-        this.logger.log('Attempting to upload to Cloudinary...');
         const result = await this.cloudinary.uploadFile(photoFile, 'restaurateurs');
         photoUrl = result.url;
-        this.logger.log('Successfully uploaded to Cloudinary:', photoUrl);
       } catch (cloudinaryError) {
-        this.logger.error('Cloudinary upload failed:', cloudinaryError);
+        this.logger.error('Cloudinary upload failed for restaurateur');
         
         try {
-          this.logger.log('Falling back to local storage...');
           if (!fs.existsSync('./uploads/restaurateurs')) {
             fs.mkdirSync('./uploads/restaurateurs', { recursive: true });
           }
@@ -61,9 +54,8 @@ export class RestaurateursService {
           fs.writeFileSync(filepath, photoFile.buffer);
           
           photoUrl = `uploads/restaurateurs/${filename}`;
-          this.logger.log(`File saved locally at ${filepath}`);
         } catch (localError) {
-          this.logger.error('Local storage fallback failed:', localError);
+          this.logger.error('Local storage fallback failed for restaurateur');
         }
       }
     }
@@ -95,10 +87,10 @@ export class RestaurateursService {
       // Send password email after successful creation
       await AuthUtils.sendPasswordEmail(createRestaurateurDto.email, password, 'Restaurateur');
 
-      this.logger.log('Restaurateur created successfully:', restaurateur.id);
+      this.logger.log(`Restaurateur created: ${restaurateur.id}`);
       return restaurateur;
     } catch (error) {
-      this.logger.error('Failed to create restaurateur:', error);
+      this.logger.error('Failed to create restaurateur');
       throw error;
     }
   }

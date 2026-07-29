@@ -42,11 +42,10 @@ export class CoachesController {
     const userId = req.user?.id || req.user?.sub || req.user?.userId;
 
     if (!userId) {
-      this.logger.error(`No userId found in request: ${JSON.stringify(req.user)}`);
+      this.logger.error('No userId found in request');
       throw new BadRequestException('User ID not found in token');
     }
 
-    this.logger.debug(`Extracted userId: ${userId}`);
     return userId;
   }
 
@@ -60,7 +59,6 @@ export class CoachesController {
   @Roles('COACH')
   async getMyProfile(@Req() req) {
     const userId = this.getUserId(req);
-    this.logger.debug(`GET /coaches/me - userId: ${userId}`);
 
     const coach = await this.coachesService.findByUserId(userId);
 
@@ -83,15 +81,12 @@ export class CoachesController {
     @Query('endDate') endDate?: string,
   ) {
     const userId = this.getUserId(req);
-    this.logger.debug(`GET /coaches/me/attendance - userId: ${userId}`);
 
     const coach = await this.coachesService.findByUserId(userId);
 
     if (!coach) {
       throw new NotFoundException('Coach non trouvé');
     }
-
-    this.logger.debug(`Coach found for attendance: ${coach.id}`);
 
     // Dates par défaut : dernier mois
     const end = endDate ? new Date(endDate) : new Date();
@@ -114,7 +109,6 @@ export class CoachesController {
     @Query('year') year?: string,
   ) {
     const userId = this.getUserId(req);
-    this.logger.debug(`GET /coaches/me/attendance/stats - userId: ${userId}`);
 
     const coach = await this.coachesService.findByUserId(userId);
 
@@ -125,8 +119,6 @@ export class CoachesController {
     const currentDate = new Date();
     const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
-
-    this.logger.debug(`Fetching stats for month=${targetMonth}, year=${targetYear}`);
 
     return this.coachesService.getCoachAttendanceStats(coach.id, targetYear, targetMonth);
   }
@@ -182,7 +174,6 @@ export class CoachesController {
   @Roles('COACH')
   async selfCheckIn(@Req() req) {
     const userId = this.getUserId(req);
-    this.logger.debug(`POST /coaches/me/self-checkin - userId: ${userId}`);
 
     const coach = await this.coachesService.findByUserId(userId);
 
@@ -238,7 +229,6 @@ export class CoachesController {
   @HttpCode(HttpStatus.OK)
   async scanAttendance(@Body() body: any) {
     const qrData = body.qrData;
-    this.logger.debug(`Scan attendance body received: ${JSON.stringify(body)}`);
 
     return await this.coachesService.scanAttendance(qrData);
   }
@@ -312,7 +302,6 @@ export class CoachesController {
   )
     photo?: Express.Multer.File,
   ) {
-    this.logger.debug(`Update coach payload: ${JSON.stringify(updateCoachDto)}`);
     return await this.coachesService.update(id, updateCoachDto, photo);
   }
 

@@ -16,11 +16,7 @@ export class VigilsService {
   ) {}
 
   async create(createVigilDto: CreateVigilDto, photoFile?: Express.Multer.File): Promise<Vigil> {
-    this.logger.log('Creating vigil with data:', {
-      firstName: createVigilDto.firstName,
-      lastName: createVigilDto.lastName,
-      email: createVigilDto.email,
-    });
+    this.logger.debug('Creating vigil');
 
     const existingVigil = await this.prisma.vigil.findFirst({
       where: {
@@ -38,13 +34,12 @@ export class VigilsService {
     let photoUrl: string | undefined;
     
     if (photoFile) {
-      this.logger.log('Photo file received, processing...');
+      this.logger.debug('Uploading vigil photo');
       try {
         const result = await this.cloudinary.uploadFile(photoFile, 'vigils');
-        photoUrl = result.url; // Use secure_url instead of url
-        this.logger.log('Successfully uploaded to Cloudinary:', photoUrl);
+        photoUrl = result.url;
       } catch (error) {
-        this.logger.error('Failed to upload photo to Cloudinary:', error);
+        this.logger.error('Failed to upload vigil photo');
       }
     }
 
@@ -75,10 +70,10 @@ export class VigilsService {
       // Send password email after successful creation
       await AuthUtils.sendPasswordEmail(createVigilDto.email, password, 'Vigil');
 
-      this.logger.log('Vigil created successfully:', vigil.id);
+      this.logger.log(`Vigil created: ${vigil.id}`);
       return vigil;
     } catch (error) {
-      this.logger.error('Failed to create vigil:', error);
+      this.logger.error('Failed to create vigil');
       throw error;
     }
   }
