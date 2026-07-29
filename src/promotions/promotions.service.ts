@@ -171,6 +171,33 @@ export class PromotionsService {
     });
   }
 
+  async findAllPublic() {
+    return this.prisma.promotion.findMany({
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        photoUrl: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        referentials: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+        _count: {
+          select: {
+            learners: true,
+          },
+        },
+      },
+    });
+  }
+
   async findOne(id: string): Promise<Promotion> {
     const promotion = await this.prisma.promotion.findUnique({
       where: { id },

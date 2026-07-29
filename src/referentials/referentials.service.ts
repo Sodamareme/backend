@@ -86,6 +86,31 @@ export class ReferentialsService {
     })) as Referential[];
   }
 
+  async findAllPublic(): Promise<Referential[]> {
+    const referentials = await this.prisma.referential.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        photoUrl: true,
+        capacity: true,
+        createdAt: true,
+        updatedAt: true,
+        numberOfSessions: true,
+        sessionLength: true,
+      },
+    });
+
+    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap(
+      referentials.map((referential) => referential.id),
+    );
+
+    return referentials.map((referential) => ({
+      ...referential,
+      attendanceClosedAt: attendanceClosedAtMap.get(referential.id) ?? null,
+    })) as Referential[];
+  }
+
    async findAllReferentials(): Promise<Referential[]> {
     return this.prisma.referential.findMany({
      

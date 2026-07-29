@@ -67,14 +67,14 @@ export class PromotionsController {
   @Public()
   @ApiOperation({ summary: 'Récupérer toutes les promotions' })
   async findAll() {
-    return this.promotionsService.findAll();
+    return this.promotionsService.findAllPublic();
   }
 
   @Get('active')
   @Public()
   @ApiOperation({ summary: 'Récupérer la promotion active' })
   async getActivePromotion() {
-    return this.promotionsService.getActivePromotion();
+    return this.promotionsService.getActivePromotionReference();
   }
 
   @Get('active/reference')

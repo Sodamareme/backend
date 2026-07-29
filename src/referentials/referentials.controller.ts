@@ -107,7 +107,7 @@ export class ReferentialsController {
   @Public()
   @ApiOperation({ summary: 'Récupérer tous les référentiels' })
   async findAll() {
-    return this.referentialsService.findAll();
+    return this.referentialsService.findAllPublic();
   }
 
 

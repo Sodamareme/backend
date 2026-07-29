@@ -31,17 +31,7 @@ export class CoachesService {
         id: true,
         firstName: true,
         lastName: true,
-        phone: true,
         matricule: true,
-        createdAt: true,
-        updatedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            role: true,
-          },
-        },
         referentials: {
           select: {
             id: true,
@@ -56,11 +46,7 @@ export class CoachesService {
         id: coach.id,
         firstName: coach.firstName,
         lastName: coach.lastName,
-        phone: coach.phone,
         matricule: coach.matricule,
-        createdAt: coach.createdAt,
-        updatedAt: coach.updatedAt,
-        user: coach.user,
         referentials: coach.referentials,
       })),
     };
