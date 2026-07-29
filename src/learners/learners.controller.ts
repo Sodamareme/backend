@@ -58,10 +58,25 @@ type LearnerCreateFormData = Partial<Omit<CreateLearnerDto, 'tutor'>> & {
 @ApiTags('learners')
 @Controller('learners')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class LearnersController {
   private readonly logger = new Logger(LearnersController.name);
 
   constructor(private readonly learnersService: LearnersService) {}
+
+  private async getLearnerWithUser(id: string) {
+    return (await this.learnersService.findOne(id)) as Learner & {
+      user?: { email?: string };
+    };
+  }
+
+  private assertAdminOrOwnLearner(req: any, learner: Learner & {
+    user?: { email?: string };
+  }) {
+    if (req.user.role !== UserRole.ADMIN && req.user.email !== learner.user?.email) {
+      throw new ForbiddenException('You can only access your own data');
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // ROUTES STATIQUES (doivent être AVANT les routes dynamiques :id)
@@ -203,6 +218,7 @@ export class LearnersController {
   }
 
   @Get('waiting-list')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get waiting list learners' })
   @ApiResponse({ status: 200, description: 'Returns list of waiting learners' })
   @ApiResponse({ status: 404, description: 'Promotion not found' })
@@ -212,7 +228,6 @@ export class LearnersController {
   }
 
   @Get('email/:email')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Find a learner by email' })
   @ApiResponse({ status: 200, description: 'Returns the learner' })
   @ApiResponse({ status: 404, description: 'Learner not found' })
@@ -233,12 +248,14 @@ export class LearnersController {
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR)
   @ApiOperation({ summary: 'Récupérer tous les apprenants' })
   async findAll() {
     return this.learnersService.findAll();
   }
 
   @Get('reference-list')
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR)
   @ApiOperation({
     summary:
       "Récupérer une liste légère d'apprenants pour intégration et filtres",
@@ -253,21 +270,17 @@ export class LearnersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer un apprenant par ID' })
-  async findOne(@Param('id') id: string) {
-    return this.learnersService.findOne(id);
+  async findOne(@Param('id') id: string, @Request() req) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
+    return learner;
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Mettre à jour un apprenant' })
   async update(@Param('id') id: string, @Body() data: any, @Request() req) {
-    const learner = (await this.learnersService.findOne(id)) as Learner & {
-      user?: { email?: string };
-    };
-
-    if (req.user.role !== UserRole.ADMIN && req.user.email !== learner.user?.email) {
-      throw new ForbiddenException('You can only update your own data');
-    }
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
 
     const sanitizedData =
       req.user.role === UserRole.ADMIN
@@ -293,7 +306,6 @@ export class LearnersController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "Mettre à jour le statut d'un apprenant (PATCH)" })
   async patchUpdateStatus(@Param('id') id: string, @Body() updateStatusDto: UpdateStatusDto) {
@@ -311,8 +323,10 @@ export class LearnersController {
   @UseInterceptors(FileInterceptor('photo'))
   @ApiOperation({ summary: "Mettre à jour la photo d'un apprenant" })
   @ApiConsumes('multipart/form-data')
-  async uploadPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  async uploadPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File, @Request() req) {
     if (!file) throw new BadRequestException('Aucune photo fournie');
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.updatePhoto(id, file);
   }
 
@@ -326,13 +340,18 @@ export class LearnersController {
     @UploadedFile() file: Express.Multer.File,
     @Body('type') type: string,
     @Body('name') name: string,
+    @Request() req,
   ) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.uploadDocument(id, file, type, name);
   }
 
   @Get(':id/attendance-stats')
   @ApiOperation({ summary: "Récupérer les statistiques de présence d'un apprenant" })
-  async getAttendanceStats(@Param('id') id: string) {
+  async getAttendanceStats(@Param('id') id: string, @Request() req) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.getAttendanceStats(id);
   }
 
@@ -340,14 +359,17 @@ export class LearnersController {
   @ApiOperation({ summary: 'Get learner attendance history' })
   @ApiResponse({ status: 200, description: "Returns the learner's attendance records ordered by date" })
   @ApiResponse({ status: 404, description: 'Learner not found' })
-  async getAttendance(@Param('id') id: string) {
+  async getAttendance(@Param('id') id: string, @Request() req) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.getAttendanceByLearner(id);
   }
 
   @Get(':id/status-history')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Récupérer l'historique de statut d'un apprenant" })
-  async getStatusHistory(@Param('id') id: string) {
+  async getStatusHistory(@Param('id') id: string, @Request() req) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.getStatusHistory(id);
   }
 
@@ -355,7 +377,9 @@ export class LearnersController {
   @ApiOperation({ summary: 'Get learner documents' })
   @ApiResponse({ status: 200, description: 'Documents retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Learner not found' })
-  async getDocuments(@Param('id') id: string) {
+  async getDocuments(@Param('id') id: string, @Request() req) {
+    const learner = await this.getLearnerWithUser(id);
+    this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.getDocuments(id);
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Put, Body, Param, UseGuards, NotFoundException, Request, ForbiddenException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,10 +8,16 @@ import { UserRole } from '@prisma/client';
 
 @ApiTags('users')
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  private assertAdminOrOwner(req: any, email: string) {
+    if (req.user.role !== UserRole.ADMIN && req.user.email !== email) {
+      throw new ForbiddenException('You can only access your own data');
+    }
+  }
 
   @Get(':id')
   @Roles(UserRole.ADMIN)
@@ -29,13 +35,15 @@ export class UsersController {
 
   @Get('photo/:email')
   @ApiOperation({ summary: 'Get user photo URL by email' })
-  async getUserPhoto(@Param('email') email: string) {
+  async getUserPhoto(@Param('email') email: string, @Request() req) {
+    this.assertAdminOrOwner(req, email);
     return this.usersService.getUserPhotoByEmail(email);
   }
 
   @Get('email/:email')
   @ApiOperation({ summary: 'Get user by email with details' })
-  async getUserByEmail(@Param('email') email: string) {
+  async getUserByEmail(@Param('email') email: string, @Request() req) {
+    this.assertAdminOrOwner(req, email);
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new NotFoundException(`User with email ${email} not found`);

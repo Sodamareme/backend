@@ -10,38 +10,36 @@ import {
   ParseUUIDPipe,
   ValidationPipe,
   UsePipes,
-  Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { GradesService } from './grades.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('grades')
 @Controller('grades')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.COACH)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class GradesController {
-  private readonly logger = new Logger(GradesController.name);
-
   constructor(private readonly gradesService: GradesService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new grade' })
   async create(@Body() createGradeDto: CreateGradeDto) {
-    this.logger.log(
-      `Creating grade for learner ${createGradeDto.learnerId} in module ${createGradeDto.moduleId}`,
-    );
     return this.gradesService.create(createGradeDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all grades' })
   async findAll() {
-    this.logger.log('Fetching all grades');
-    const result = await this.gradesService.findAll();
-    this.logger.log(`Found ${result.length} grades`);
-    return result;
+    return this.gradesService.findAll();
   }
 
   @Get('learner/:learnerId')
@@ -50,7 +48,6 @@ export class GradesController {
   async getGradesByLearner(
     @Param('learnerId', ParseUUIDPipe) learnerId: string,
   ) {
-    this.logger.log(`Fetching grades for learner: ${learnerId}`);
     return this.gradesService.getGradesByLearner(learnerId);
   }
 
@@ -60,7 +57,6 @@ export class GradesController {
   async getGradesByModule(
     @Param('moduleId', ParseUUIDPipe) moduleId: string,
   ) {
-    this.logger.log(`Fetching grades for module: ${moduleId}`);
     return this.gradesService.getGradesByModule(moduleId);
   }
 
@@ -68,7 +64,6 @@ export class GradesController {
   @ApiOperation({ summary: 'Get a grade by ID' })
   @ApiParam({ name: 'id', description: 'Grade ID (UUID format)' })
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    this.logger.log(`Fetching grade with ID: ${id}`);
     return this.gradesService.findOne(id);
   }
 
@@ -79,7 +74,6 @@ export class GradesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateGradeDto: UpdateGradeDto,
   ) {
-    this.logger.log(`Updating grade with ID: ${id}`);
     return this.gradesService.update(id, updateGradeDto);
   }
 
@@ -87,7 +81,6 @@ export class GradesController {
   @ApiOperation({ summary: 'Delete a grade' })
   @ApiParam({ name: 'id', description: 'Grade ID (UUID format)' })
   async remove(@Param('id', ParseUUIDPipe) id: string) {
-    this.logger.log(`Deleting grade with ID: ${id}`);
     return this.gradesService.remove(id);
   }
 }

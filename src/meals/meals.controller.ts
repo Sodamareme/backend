@@ -16,8 +16,8 @@ import { UserRole } from '@prisma/client';
 
 @ApiTags('meals')
 @Controller('meals')
-// @UseGuards(JwtAuthGuard, RolesGuard)
-// @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth()
 export class MealsController {
   constructor(private readonly mealsService: MealsService) {}
 
@@ -60,7 +60,7 @@ export class MealsController {
   }
 
   @Get('scans/latest')
-  // @Roles(UserRole.RESTAURATEUR)
+  @Roles(UserRole.ADMIN, UserRole.RESTAURATEUR, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Obtenir les derniers scans de repas' })
   async getLatestScans() {
     return this.mealsService.getLatestScans();
