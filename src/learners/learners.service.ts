@@ -1168,9 +1168,9 @@ export class LearnersService {
       program: learner.referential?.name ?? 'N/A',
       year: computedYear,
       status:
-        learner.status === 'GRADUATED'
-          ? 'graduated'
-          : learner.status === 'ABANDONED' || learner.status === 'REPLACED'
+        learner.status === LearnerStatus.ABANDONED ||
+        learner.status === LearnerStatus.REPLACED ||
+        learner.status === LearnerStatus.WAITING
             ? 'inactive'
             : 'active',
       enrollmentDate: enrollmentDate.toISOString(),
