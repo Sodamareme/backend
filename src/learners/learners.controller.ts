@@ -253,10 +253,31 @@ export class LearnersController {
   }
 
   @Put(':id')
-  @Roles(UserRole.ADMIN)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Mettre à jour un apprenant' })
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.learnersService.update(id, data);
+  async update(@Param('id') id: string, @Body() data: any, @Request() req) {
+    const learner = (await this.learnersService.findOne(id)) as Learner & {
+      user?: { email?: string };
+    };
+
+    if (req.user.role !== UserRole.ADMIN && req.user.email !== learner.user?.email) {
+      throw new ForbiddenException('You can only update your own data');
+    }
+
+    const sanitizedData =
+      req.user.role === UserRole.ADMIN
+        ? data
+        : {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            gender: data.gender,
+            phone: data.phone,
+            address: data.address,
+            birthDate: data.birthDate,
+            birthPlace: data.birthPlace,
+          };
+
+    return this.learnersService.update(id, sanitizedData);
   }
 
   @Put(':id/status')
