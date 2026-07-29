@@ -1145,9 +1145,60 @@ export class LearnersService {
   async update(id: string, data: Partial<Learner>): Promise<Learner> {
     await this.findOne(id);
 
+    const normalizedData: Prisma.LearnerUpdateInput = {};
+
+    if (typeof data.firstName === 'string') {
+      const firstName = data.firstName.trim();
+      if (!firstName) {
+        throw new BadRequestException('Le prénom ne peut pas être vide');
+      }
+      normalizedData.firstName = firstName;
+    }
+
+    if (typeof data.lastName === 'string') {
+      const lastName = data.lastName.trim();
+      if (!lastName) {
+        throw new BadRequestException('Le nom ne peut pas être vide');
+      }
+      normalizedData.lastName = lastName;
+    }
+
+    if (typeof data.phone === 'string') {
+      normalizedData.phone = data.phone.trim();
+    }
+
+    if (typeof data.address === 'string') {
+      normalizedData.address = data.address.trim();
+    }
+
+    if (typeof data.birthPlace === 'string') {
+      normalizedData.birthPlace = data.birthPlace.trim();
+    }
+
+    if (data.gender !== undefined) {
+      const normalizedGender =
+        typeof data.gender === 'string' ? data.gender.trim().toUpperCase() : data.gender;
+
+      if (!Object.values(Gender).includes(normalizedGender as Gender)) {
+        throw new BadRequestException('Le genre doit être MALE ou FEMALE');
+      }
+
+      normalizedData.gender = normalizedGender as Gender;
+    }
+
+    if (data.birthDate !== undefined) {
+      const birthDate = data.birthDate instanceof Date ? data.birthDate : new Date(data.birthDate);
+
+      if (Number.isNaN(birthDate.getTime())) {
+        throw new BadRequestException('La date de naissance est invalide');
+      }
+
+      normalizedData.birthDate = birthDate;
+    }
+
     return this.prisma.learner.update({
       where: { id },
-      data,
+      data: normalizedData,
       include: {
         user: true,
         referential: true,
