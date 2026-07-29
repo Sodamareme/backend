@@ -13,7 +13,9 @@ import {
   InternalServerErrorException,
   Logger,
   Patch,
-  Delete
+  Delete,
+  Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -27,6 +29,7 @@ import { UpdateAbsenceStatusDto } from './dto/update-absence-status.dto';
 import { CoachScanResponse, LearnerScanResponse } from './interfaces/scan-response.interface';
 import { MonthlyStats } from './interfaces/attendance-stats.interface';
 import { DailyStats } from './interfaces/attendance-stats.interface';
+import { validateImageUpload } from '../common/image-upload.util';
 
 @ApiTags('attendance')
 @Controller('attendance')
@@ -80,6 +83,15 @@ export class AttendanceController {
     @Body('date') date?: string,
     @UploadedFile() document?: Express.Multer.File,
   ) {
+    if (!justification?.trim()) {
+      throw new BadRequestException('La justification est requise');
+    }
+
+    validateImageUpload(document, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'Le document justificatif',
+    });
+
     let documentUrl: string | undefined;
     if (document) {
       try {
@@ -105,6 +117,15 @@ export class AttendanceController {
     @Body('removeExistingDocument') removeExistingDocument?: string,
     @UploadedFile() document?: Express.Multer.File,
   ) {
+    if (!justification?.trim()) {
+      throw new BadRequestException('La justification est requise');
+    }
+
+    validateImageUpload(document, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'Le document justificatif',
+    });
+
     let documentUrl: string | undefined;
 
     if (document) {
@@ -229,20 +250,45 @@ export class AttendanceController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get learners with the highest absence and late counts' })
   @ApiQuery({ name: 'period', required: false, example: 'month' })
+  @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-07-29' })
   @ApiQuery({ name: 'promotionId', required: false })
   @ApiQuery({ name: 'referentialId', required: false })
   @ApiQuery({ name: 'limit', required: false, example: 5 })
   async getAtRiskLearners(
-    @Query('period') period?: 'week' | 'month' | 'quarter',
+    @Query('period') period?: 'week' | 'month' | 'quarter' | 'year' | 'custom',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('promotionId') promotionId?: string,
     @Query('referentialId') referentialId?: string,
     @Query('limit') limit?: string,
   ) {
     return this.attendanceService.getAtRiskLearners({
       period,
+      startDate,
+      endDate,
       promotionId,
       referentialId,
       limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Get('stats/learner-regularity')
+  @Roles(UserRole.APPRENANT)
+  @ApiOperation({ summary: 'Get learner regularity ranking inside own referential' })
+  @ApiQuery({ name: 'period', required: false, example: 'month' })
+  @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-07-29' })
+  async getLearnerRegularity(
+    @Req() req,
+    @Query('period') period?: 'week' | 'month' | 'quarter' | 'year' | 'custom',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.attendanceService.getLearnerRegularityLeaderboard(req.user.email, {
+      period,
+      startDate,
+      endDate,
     });
   }
 

@@ -16,7 +16,9 @@ import { MealsModule } from './meals/meals.module';
 import { VigilsModule } from './vigils/vigils.module';
 import { RestaurateursModule } from './restaurateurs/restaurateurs.module';
 import { GradesModule } from './grades/grades.module';
-import { EmailModule } from '../src/email/email.module';import { PrismaService } from './prisma/prisma.service';
+import { EmailModule } from '../src/email/email.module';
+import { PrismaService } from './prisma/prisma.service';
+import { PendingLearnersModule } from './pending-learners/pending-learners.module';
 import { Cron } from '@nestjs/schedule';
 @Injectable()
 export class DatabaseKeepalive {
@@ -58,6 +60,7 @@ export class DatabaseKeepalive {
     MealsModule,
     GradesModule,
     EmailModule,
+    PendingLearnersModule,
   
   ],
   providers: [

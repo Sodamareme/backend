@@ -15,13 +15,8 @@ export class CloudinaryService {
     const apiKey = this.configService.get('CLOUDINARY_API_KEY');
     const apiSecret = this.configService.get('CLOUDINARY_API_SECRET');
 
-    this.logger.log('Initializing Cloudinary configuration...');
-    this.logger.log(`Cloud Name: ${cloudName ? '✅ Found' : '❌ Missing'}`);
-    this.logger.log(`API Key: ${apiKey ? '✅ Found' : '❌ Missing'}`);
-    this.logger.log(`API Secret: ${apiSecret ? '✅ Found' : '❌ Missing'}`);
-
     if (!cloudName || !apiKey || !apiSecret) {
-      this.logger.error('❌ Missing Cloudinary configuration! Check your .env file.');
+      this.logger.error('Cloudinary configuration is incomplete');
       return;
     }
 
@@ -33,9 +28,9 @@ export class CloudinaryService {
       });
 
       this.isConfigured = true;
-      this.logger.log('✅ Cloudinary configured successfully.');
+      this.logger.log('Cloudinary configured successfully');
     } catch (error) {
-      this.logger.error('❌ Error configuring Cloudinary:', error);
+      this.logger.error('Cloudinary configuration failed');
     }
   }
 
@@ -53,10 +48,6 @@ export class CloudinaryService {
     }
 
     try {
-      this.logger.log(
-        `📤 Attempting to upload file "${file.originalname}" to folder "${folder}" (try #${retryCount + 1})`
-      );
-
       const uploadOptions = {
         folder,
         resource_type: 'auto' as const,
@@ -72,13 +63,8 @@ export class CloudinaryService {
             uploadOptions,
             (error, result) => {
               if (error) {
-                this.logger.error('❌ Cloudinary upload failed:', error);
                 reject(error);
               } else {
-                this.logger.log('✅ Cloudinary upload success:', {
-                  public_id: result.public_id,
-                  url: result.secure_url,
-                });
                 resolve(result);
               }
             }
@@ -92,14 +78,10 @@ export class CloudinaryService {
 
       return { url: result.secure_url };
     } catch (error) {
-      this.logger.error(
-        `⚠️ Upload failed (attempt ${retryCount + 1}): ${error.message}`
-      );
+      this.logger.warn(`Cloudinary upload failed on attempt ${retryCount + 1}`);
 
-      // Retry logic
       if (retryCount < this.maxRetries) {
         const delay = 1000 * (retryCount + 1);
-        this.logger.warn(`⏳ Retrying upload in ${delay / 1000}s...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         return this.uploadFile(file, folder, retryCount + 1);
       }
@@ -113,21 +95,16 @@ export class CloudinaryService {
    */
   async deleteFile(publicId: string): Promise<void> {
     if (!this.isConfigured) {
-      this.logger.error('Cloudinary is not configured');
       throw new Error('Cloudinary is not configured');
     }
 
-    this.logger.log(`🗑 Attempting to delete file with public ID: ${publicId}`);
-
     try {
       const result = await cloudinary.uploader.destroy(publicId);
-      if (result.result === 'ok') {
-        this.logger.log(`✅ Successfully deleted file: ${publicId}`);
-      } else {
-        this.logger.warn(`⚠️ Could not delete file: ${JSON.stringify(result)}`);
+      if (result.result !== 'ok') {
+        this.logger.warn('Cloudinary file deletion did not return ok');
       }
     } catch (error) {
-      this.logger.error(`❌ Error deleting file: ${error.message}`);
+      this.logger.error('Cloudinary file deletion failed');
       throw error;
     }
   }
@@ -159,7 +136,7 @@ export class CloudinaryService {
     const publicId = this.extractPublicIdFromUrl(url);
 
     if (!publicId) {
-      this.logger.warn(`⚠️ Could not extract Cloudinary public ID from URL: ${url}`);
+      this.logger.warn('Could not extract Cloudinary public ID from URL');
       return;
     }
 

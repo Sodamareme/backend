@@ -30,12 +30,11 @@ export class AuthService {
   }
 
   async login(user: LoginDto) {
-    this.logger.log(`Login attempt for email: ${user.email}`);
+    const normalizedEmail = user.email.trim().toLowerCase();
     
-    // Vérifier si l'email existe
     const emailExist = await this.prisma.user.findUnique({
       where: {
-        email: user.email
+        email: normalizedEmail
       }
     });
 
@@ -49,15 +48,12 @@ export class AuthService {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
 
-    // Générer le token JWT
     const token = this.jwtService.sign({ 
-      email: user.email, 
+      email: normalizedEmail, 
       sub: emailExist.id,
-      userId: emailExist.id, // Ajouter userId pour cohérence
+      userId: emailExist.id,
       role: emailExist.role 
     });
-   
-    this.logger.log(`✅ Login successful for user: ${emailExist.email}`);
 
     return {
       access_token: token,
@@ -73,19 +69,19 @@ export class AuthService {
    * Changer le mot de passe d'un utilisateur
    */
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
-    this.logger.log(`🔐 Password change request for userId: ${userId}`);
-
-    // 1. Vérifier que les mots de passe correspondent
     if (changePasswordDto.newPassword !== changePasswordDto.confirmPassword) {
       throw new BadRequestException('Les nouveaux mots de passe ne correspondent pas');
     }
 
-    // 2. Vérifier que le nouveau mot de passe est différent de l'ancien
     if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
       throw new BadRequestException('Le nouveau mot de passe doit être différent de l\'ancien');
     }
 
-    // 3. Récupérer l'utilisateur
+    const passwordValidation = this.validatePasswordStrength(changePasswordDto.newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(passwordValidation.errors.join(' '));
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId }
     });
@@ -94,7 +90,6 @@ export class AuthService {
       throw new UnauthorizedException('Utilisateur non trouvé');
     }
 
-    // 4. Vérifier l'ancien mot de passe
     const isCurrentPasswordValid = await bcrypt.compare(
       changePasswordDto.currentPassword,
       user.password
@@ -104,10 +99,8 @@ export class AuthService {
       throw new UnauthorizedException('Le mot de passe actuel est incorrect');
     }
 
-    // 5. Hasher le nouveau mot de passe
     const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
 
-    // 6. Mettre à jour le mot de passe
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -115,8 +108,6 @@ export class AuthService {
         updatedAt: new Date()
       }
     });
-
-    this.logger.log(`✅ Password changed successfully for user: ${user.email}`);
 
     return {
       success: true,
@@ -173,14 +164,13 @@ export class AuthService {
    * Demander la réinitialisation du mot de passe
    */
 async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    this.logger.log(`📧 Password reset request for email: ${forgotPasswordDto.email}`);
+    const normalizedEmail = forgotPasswordDto.email.trim().toLowerCase();
 
     const user = await this.prisma.user.findUnique({
-      where: { email: forgotPasswordDto.email }
+      where: { email: normalizedEmail }
     });
 
     if (!user) {
-      this.logger.warn(`❌ User not found for email: ${forgotPasswordDto.email}`);
       return {
         success: true,
         message: 'Si un compte existe avec cet email, vous recevrez un lien de réinitialisation'
@@ -196,14 +186,10 @@ async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
       { expiresIn: '1h' }
     );
 
-    this.logger.log(`✅ Reset token generated for user: ${user.email}`);
-
-    // ✅ ENVOYER L'EMAIL
     try {
       await this.emailService.sendPasswordResetEmail(user.email, resetToken);
-      this.logger.log(`📧 Reset email sent to ${user.email}`);
     } catch (error) {
-      this.logger.error(`❌ Failed to send email:`, error);
+      this.logger.error('Password reset email sending failed');
       throw new BadRequestException('Erreur lors de l\'envoi de l\'email');
     }
 
@@ -219,28 +205,26 @@ async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
    * Réinitialiser le mot de passe avec le token
    */
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    this.logger.log(`🔐 Password reset attempt with token`);
-
-    // Vérifier que les mots de passe correspondent
     if (resetPasswordDto.newPassword !== resetPasswordDto.confirmPassword) {
       throw new BadRequestException('Les mots de passe ne correspondent pas');
     }
 
-    // Vérifier et décoder le token
+    const passwordValidation = this.validatePasswordStrength(resetPasswordDto.newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(passwordValidation.errors.join(' '));
+    }
+
     let decoded: any;
     try {
       decoded = this.jwtService.verify(resetPasswordDto.token);
     } catch (error) {
-      this.logger.error(`❌ Invalid or expired token`);
       throw new UnauthorizedException('Le lien de réinitialisation est invalide ou expiré');
     }
 
-    // Vérifier que c'est bien un token de réinitialisation
     if (decoded.type !== 'password-reset') {
       throw new UnauthorizedException('Token invalide');
     }
 
-    // Récupérer l'utilisateur
     const user = await this.prisma.user.findUnique({
       where: { id: decoded.userId }
     });
@@ -249,10 +233,8 @@ async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Hasher le nouveau mot de passe
     const hashedPassword = await bcrypt.hash(resetPasswordDto.newPassword, 10);
 
-    // Mettre à jour le mot de passe
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -261,14 +243,11 @@ async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
       }
     });
 
-    // ✅ Envoyer email de confirmation
     try {
       await this.emailService.sendPasswordResetConfirmation(user.email);
     } catch (error) {
-      this.logger.error('Failed to send confirmation email:', error);
+      this.logger.error('Password reset confirmation email failed');
     }
-
-    this.logger.log(`✅ Password reset successfully for user: ${user.email}`);
 
     return {
       success: true,

@@ -244,7 +244,7 @@ ODC Inside - Orange Digital Center
     }
   ): Promise<void> {
     const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
-    const validationLink = `${frontendUrl}/admin/pending-learners?id=${learnerData.pendingLearnerId}`;
+    const validationLink = `${frontendUrl}/dashboard/pending-learners?id=${learnerData.pendingLearnerId}`;
 
     const mailOptions = {
       from: {

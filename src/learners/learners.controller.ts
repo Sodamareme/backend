@@ -37,6 +37,7 @@ import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
 import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
 import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
+import { validateImageUpload } from '../common/image-upload.util';
 
 type LearnerTutorFormInput = Partial<CreateTutorDto>;
 
@@ -67,7 +68,8 @@ export class LearnersController {
   // ─────────────────────────────────────────────────────────────────────────
 
   @Post()
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('photoFile'))
   @ApiOperation({ summary: 'Créer un nouvel apprenant' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Apprenant créé' })
@@ -76,7 +78,10 @@ export class LearnersController {
     @Body() data: LearnerCreateFormData,
     @UploadedFile() photoFile?: Express.Multer.File,
   ) {
-    this.logger.debug(`Received learner creation request (photo: ${photoFile ? 'yes' : 'no'})`);
+    validateImageUpload(photoFile, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'La photo de l apprenant',
+    });
 
     let tutor: LearnerTutorFormInput = {};
 

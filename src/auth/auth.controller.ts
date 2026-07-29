@@ -1,5 +1,5 @@
 // src/auth/auth.controller.ts
-import { Controller, Post, UseGuards, Request, Body, Put, Req } from '@nestjs/common';
+import { Controller, Post, UseGuards, Body, Put, Req, Logger } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
@@ -10,6 +10,8 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 @ApiTags('auth') 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
@@ -56,7 +58,7 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto
   ) {
     const userId = req.user.userId || req.user.sub || req.user.id;
-    console.log('🔐 Change password request for userId:', userId);
+    this.logger.debug(`Change password requested for user ${userId}`);
     return this.authService.changePassword(userId, changePasswordDto);
   }
 
@@ -119,5 +121,4 @@ export class AuthController {
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
   }
-
-  }
+}

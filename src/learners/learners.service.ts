@@ -134,6 +134,7 @@ export class LearnersService {
   async create(
     createLearnerDto: CreateLearnerDto,
     photoFile?: Express.Multer.File,
+    existingPhotoUrl?: string,
   ): Promise<Learner> {
     this.logger.log('=== SERVICE CREATE - données reçues ===');
     this.logger.log(`firstName: ${createLearnerDto.firstName}`);
@@ -266,19 +267,19 @@ export class LearnersService {
           }
 
           // 5. Upload photo (sans bloquer si erreur)
-          let photoUrl: string | undefined;
-         if (photoFile) {
-  try {
-    this.logger.log(`=== UPLOAD PHOTO === size: ${photoFile.size}, type: ${photoFile.mimetype}`);
-    const result = await this.cloudinary.uploadFile(photoFile, 'learners');
-    photoUrl = result.url;
-    this.logger.log(`=== PHOTO URL === ${photoUrl}`);
-  } catch (error) {
-    this.logger.error(`=== PHOTO UPLOAD ÉCHOUÉE ===`);
-    this.logger.error(`Message: ${error.message}`);
-    this.logger.error(`Stack: ${error.stack}`);
-  }
-}
+          let photoUrl: string | undefined = existingPhotoUrl;
+          if (photoFile) {
+            try {
+              this.logger.log(`=== UPLOAD PHOTO === size: ${photoFile.size}, type: ${photoFile.mimetype}`);
+              const result = await this.cloudinary.uploadFile(photoFile, 'learners');
+              photoUrl = result.url;
+              this.logger.log(`=== PHOTO URL === ${photoUrl}`);
+            } catch (error) {
+              this.logger.error(`=== PHOTO UPLOAD ÉCHOUÉE ===`);
+              this.logger.error(`Message: ${error.message}`);
+              this.logger.error(`Stack: ${error.stack}`);
+            }
+          }
 
           // 6. Vérifier doublons
           const existingLearner = await prisma.learner.findFirst({

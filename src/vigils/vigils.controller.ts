@@ -48,8 +48,11 @@ export class VigilsController {
     @Body() createVigilDto: CreateVigilDto,
     @UploadedFile(
       new ParseFilePipeBuilder()
+        .addMaxSizeValidator({
+          maxSize: 10 * 1024 * 1024,
+        })
         .addFileTypeValidator({
-          fileType: /(jpg|jpeg|png)$/,
+          fileType: /(jpg|jpeg|png|webp|gif)$/,
         })
         .build({
           errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,

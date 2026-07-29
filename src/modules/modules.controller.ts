@@ -35,7 +35,7 @@ export class ModulesController {
   @UseInterceptors(FileInterceptor('photoFile', {
     storage: memoryStorage(),
     fileFilter: (req, file, cb) => {
-      if (!file.mimetype.match(/^image\/(jpg|jpeg|png|gif)$/)) {
+      if (!file.mimetype.match(/^image\/(jpg|jpeg|png|gif|webp)$/)) {
         return cb(new Error('Only image files are allowed!'), false);
       }
       cb(null, true);
