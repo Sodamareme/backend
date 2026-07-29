@@ -144,7 +144,7 @@ export class LearnersController {
       tutor: normalizedTutor,
     };
 
-    this.logger.debug(`Forwarding learner creation to service for ${cleanDto.email ?? 'unknown-email'}`);
+    this.logger.debug('Forwarding learner creation to service');
 
     return this.learnersService.create(cleanDto, photoFile);
   }

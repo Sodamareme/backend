@@ -347,14 +347,7 @@ export class GradesService {
         throw error;
       }
       
-      this.logger.error(`❌ Error fetching grades for module ${moduleId}:`, error);
-      
-      // Log détaillé pour déboguer
-      if (error instanceof Error) {
-        this.logger.error(`Error name: ${error.name}`);
-        this.logger.error(`Error message: ${error.message}`);
-        this.logger.error(`Error stack: ${error.stack}`);
-      }
+      this.logger.error(`Error fetching grades for module ${moduleId}: ${error instanceof Error ? error.message : 'unknown error'}`);
       
       throw new BadRequestException(
         `Erreur lors de la récupération des notes du module: ${error.message}`

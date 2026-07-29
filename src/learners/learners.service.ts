@@ -1121,18 +1121,30 @@ export class LearnersService {
     return learner;
   }
 
-  async findByMatricule(mat: string): Promise<Learner> {
+  async findByMatricule(mat: string) {
     const learner = await this.prisma.learner.findFirst({
       where: { matricule: mat },
-      include: {
-        user: true,
-        referential: true,
-        promotion: true,
-        tutor: true,
-        kit: true,
-        attendances: true,
-        grades: true,
-        documents: true,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        photoUrl: true,
+        matricule: true,
+        status: true,
+        referential: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+        promotion: {
+          select: {
+            id: true,
+            name: true,
+            startDate: true,
+          },
+        },
       },
     });
 
@@ -1140,7 +1152,36 @@ export class LearnersService {
       throw new NotFoundException(`Aucun apprenant trouvé avec le matricule ${mat}`);
     }
 
-    return learner;
+    const enrollmentDate = learner.promotion?.startDate ?? new Date();
+    const currentYear = new Date().getFullYear();
+    const enrollmentYear = new Date(enrollmentDate).getFullYear();
+    const computedYear = Math.max(1, currentYear - enrollmentYear + 1);
+
+    return {
+      id: learner.id,
+      firstName: learner.firstName,
+      lastName: learner.lastName,
+      photoUrl: learner.photoUrl,
+      photo: learner.photoUrl,
+      matricule: learner.matricule,
+      studentNumber: learner.matricule,
+      program: learner.referential?.name ?? 'N/A',
+      year: computedYear,
+      status:
+        learner.status === 'GRADUATED'
+          ? 'graduated'
+          : learner.status === 'ABANDONED' || learner.status === 'REPLACED'
+            ? 'inactive'
+            : 'active',
+      enrollmentDate: enrollmentDate.toISOString(),
+      referential: learner.referential,
+      promotion: learner.promotion
+        ? {
+            id: learner.promotion.id,
+            name: learner.promotion.name,
+          }
+        : null,
+    };
   }
 
   async update(id: string, data: Partial<Learner>): Promise<Learner> {

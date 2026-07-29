@@ -87,7 +87,7 @@ export class ReferentialsController {
       throw new BadRequestException('Session length is required when creating multiple sessions');
     }
 
-    this.logger.log(`Creating referential with data: ${JSON.stringify(createData)}`);
+    this.logger.log(`Creating referential "${createData.name}"`);
     return this.referentialsService.create(createData);
   }
 
