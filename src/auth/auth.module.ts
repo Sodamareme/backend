@@ -8,6 +8,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { getJwtSecret } from './jwt-secret';
+import { AuthRateLimitService } from './auth-rate-limit.service';
 @Module({
   imports: [
     UsersModule,
@@ -20,7 +21,7 @@ import { getJwtSecret } from './jwt-secret';
       }),
     }),
   ],
-  providers: [AuthService, LocalStrategy, JwtStrategy],
+  providers: [AuthService, LocalStrategy, JwtStrategy, AuthRateLimitService],
   controllers: [AuthController],
   exports: [AuthService],
 })

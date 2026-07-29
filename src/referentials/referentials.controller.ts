@@ -22,6 +22,7 @@ import { Public } from '../auth/decorators/public.decorators';
 import { UserRole } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreateReferentialDto } from './dto/create-referential.dto';
+import { validateImageUpload } from '../common/image-upload.util';
 
 @ApiTags('referentials')
 @Controller('referentials')
@@ -53,6 +54,11 @@ export class ReferentialsController {
     @Body() formData: any,
     @UploadedFile() photoFile?: Express.Multer.File,
   ) {
+    validateImageUpload(photoFile, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'L image du referentiel',
+    });
+
     const { name, capacity, description, numberOfSessions, sessionLength } = formData;
 
     if (!name) {

@@ -1,4 +1,3 @@
-// src/auth/auth.controller.ts
 import { Controller, Post, UseGuards, Body, Put, Req, Logger } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
@@ -7,12 +6,25 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { AuthRateLimitService } from './auth-rate-limit.service';
 @ApiTags('auth') 
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authRateLimitService: AuthRateLimitService,
+  ) {}
+
+  private getClientIp(req: any) {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (typeof forwardedFor === 'string' && forwardedFor.length > 0) {
+      return forwardedFor.split(',')[0].trim();
+    }
+
+    return req.ip || req.socket?.remoteAddress || 'unknown';
+  }
 
   @Post('login')
   @ApiOperation({ summary: 'Authentification utilisateur' })
@@ -32,7 +44,14 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 401, description: 'Email ou mot de passe incorrect' })
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto, @Req() req: any) {
+    const clientIp = this.getClientIp(req);
+    this.authRateLimitService.consume(`login:${clientIp}`, {
+      limit: 5,
+      windowMs: 10 * 60 * 1000,
+      message:
+        'Trop de tentatives de connexion. Veuillez reessayer dans quelques minutes.',
+    });
     return this.authService.login(loginDto);
   }
 
@@ -99,7 +118,14 @@ export class AuthController {
       }
     }
   })
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto, @Req() req: any) {
+    const clientIp = this.getClientIp(req);
+    this.authRateLimitService.consume(`forgot-password:${clientIp}`, {
+      limit: 3,
+      windowMs: 15 * 60 * 1000,
+      message:
+        'Trop de demandes de reinitialisation. Veuillez reessayer plus tard.',
+    });
     return this.authService.forgotPassword(forgotPasswordDto);
   }
 
@@ -118,7 +144,14 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Les mots de passe ne correspondent pas' })
   @ApiResponse({ status: 401, description: 'Token invalide ou expiré' })
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto, @Req() req: any) {
+    const clientIp = this.getClientIp(req);
+    this.authRateLimitService.consume(`reset-password:${clientIp}`, {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+      message:
+        'Trop de tentatives de reinitialisation. Veuillez reessayer plus tard.',
+    });
     return this.authService.resetPassword(resetPasswordDto);
   }
 }

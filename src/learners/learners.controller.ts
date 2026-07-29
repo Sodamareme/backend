@@ -37,7 +37,7 @@ import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { Public } from '../auth/decorators/public.decorators';
 import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
 import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
-import { validateImageUpload } from '../common/image-upload.util';
+import { validateFileUpload, validateImageUpload } from '../common/image-upload.util';
 
 type LearnerTutorFormInput = Partial<CreateTutorDto>;
 
@@ -325,6 +325,10 @@ export class LearnersController {
   @ApiConsumes('multipart/form-data')
   async uploadPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File, @Request() req) {
     if (!file) throw new BadRequestException('Aucune photo fournie');
+    validateImageUpload(file, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'La photo de l apprenant',
+    });
     const learner = await this.getLearnerWithUser(id);
     this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.updatePhoto(id, file);
@@ -342,6 +346,18 @@ export class LearnersController {
     @Body('name') name: string,
     @Request() req,
   ) {
+    validateFileUpload(file, {
+      allowedMimeTypes: [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+      ],
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'Le document de l apprenant',
+      allowedFormatsLabel: 'PDF, JPG, PNG, GIF ou WebP',
+    });
     const learner = await this.getLearnerWithUser(id);
     this.assertAdminOrOwnLearner(req, learner);
     return this.learnersService.uploadDocument(id, file, type, name);

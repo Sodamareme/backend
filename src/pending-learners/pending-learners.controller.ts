@@ -19,6 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { Public } from '../auth/decorators/public.decorators';
+import { validateImageUpload } from '../common/image-upload.util';
 
 @Controller('pending-learners')
 export class PendingLearnersController {
@@ -31,6 +32,11 @@ export class PendingLearnersController {
     @Body() data: any,
     @UploadedFile() photoFile?: Express.Multer.File,
   ) {
+    validateImageUpload(photoFile, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'La photo de l apprenant',
+    });
+
     const tutor = data?.tutor && typeof data.tutor === 'object'
       ? data.tutor
       : {
