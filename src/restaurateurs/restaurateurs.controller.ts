@@ -5,6 +5,7 @@ import { CreateRestaurateurDto } from './dto/create-restaurateur.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { validateImageUpload } from '../common/image-upload.util';
 
 @Controller('restaurateurs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,6 +16,10 @@ export class RestaurateursController {
   @Roles('ADMIN')
   @UseInterceptors(FileInterceptor('photo'))
   create(@Body() createRestaurateurDto: CreateRestaurateurDto, @UploadedFile() photo?: Express.Multer.File) {
+    validateImageUpload(photo, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      fieldLabel: 'La photo du restaurateur',
+    });
     return this.restaurateursService.create(createRestaurateurDto, photo);
   }
 

@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Body, Put, Req, Logger } from '@nestjs/common';
+import { Controller, Post, UseGuards, Body, Put, Req, Logger, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
@@ -7,6 +7,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthRateLimitService } from './auth-rate-limit.service';
+import { clearAuthCookie, setAuthCookie } from './auth-cookie.util';
+import { Response } from 'express';
 @ApiTags('auth') 
 @Controller('auth')
 export class AuthController {
@@ -44,7 +46,11 @@ export class AuthController {
     }
   })
   @ApiResponse({ status: 401, description: 'Email ou mot de passe incorrect' })
-  async login(@Body() loginDto: LoginDto, @Req() req: any) {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const clientIp = this.getClientIp(req);
     this.authRateLimitService.consume(`login:${clientIp}`, {
       limit: 5,
@@ -52,7 +58,9 @@ export class AuthController {
       message:
         'Trop de tentatives de connexion. Veuillez reessayer dans quelques minutes.',
     });
-    return this.authService.login(loginDto);
+    const result = await this.authService.login(loginDto);
+    setAuthCookie(res, result.access_token, req);
+    return result;
   }
 
   @Put('change-password')
@@ -153,5 +161,16 @@ export class AuthController {
         'Trop de tentatives de reinitialisation. Veuillez reessayer plus tard.',
     });
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Fermer la session utilisateur' })
+  @ApiResponse({ status: 200, description: 'Session fermee avec succes' })
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    clearAuthCookie(res, req);
+    return {
+      success: true,
+      message: 'Session fermee avec succes',
+    };
   }
 }
