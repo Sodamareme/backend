@@ -122,10 +122,17 @@ export class ReferentialsController {
   }
 
   @Get(':id')
-  @Public()
-  @ApiOperation({ summary: 'Récupérer un référentiel par ID' })
-  async findOne(@Param('id') id: string) {
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR)
+  @ApiOperation({ summary: 'Récupérer un référentiel détaillé par ID' })
+  async findOneDetailed(@Param('id') id: string) {
     return this.referentialsService.findOne(id);
+  }
+
+  @Get(':id/public')
+  @Public()
+  @ApiOperation({ summary: 'Récupérer un référentiel public par ID' })
+  async findOne(@Param('id') id: string) {
+    return this.referentialsService.findOnePublic(id);
   }
 
   @Get(':id/statistics')

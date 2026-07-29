@@ -120,6 +120,27 @@ export class ReferentialsService {
     } as ReferentialWithRelations;
   }
 
+  async findOnePublic(id: string): Promise<Referential> {
+    const referential = await this.prisma.referential.findUnique({
+      where: { id },
+      include: {
+        sessions: true,
+        modules: true,
+      },
+    });
+
+    if (!referential) {
+      throw new NotFoundException('Référentiel non trouvé');
+    }
+
+    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+
+    return {
+      ...referential,
+      attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+    } as Referential;
+  }
+
   async update(id: string, data: Prisma.ReferentialUpdateInput & { attendanceClosedAt?: Date | string | null }): Promise<Referential> {
     await this.findOne(id);
 
