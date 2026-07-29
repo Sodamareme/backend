@@ -191,9 +191,10 @@ export class AttendanceService {
         "attendance",
       );
     const activeLearners = learners.filter((learner) =>
-      this.isLearnerExpectedForAttendanceOnDate(
+      this.isLearnerExpectedForAttendanceInRange(
         learner,
         referentialAttendanceClosures,
+        startDate,
         endDate,
       ),
     );
@@ -597,6 +598,34 @@ export class AttendanceService {
     }
 
     return true;
+  }
+
+  private isLearnerExpectedForAttendanceInRange(
+    learner: {
+      refId?: string | null;
+      promotionId?: string | null;
+    },
+    referentialAttendanceClosures: Map<string, Date | null>,
+    startDate: Date,
+    endDate: Date,
+  ): boolean {
+    const normalizedStartDate = this.normalizeAttendanceBoundary(startDate);
+    const normalizedEndDate = this.normalizeAttendanceBoundary(endDate);
+
+    const attendanceClosedAt =
+      learner.refId && referentialAttendanceClosures.has(learner.refId)
+        ? referentialAttendanceClosures.get(learner.refId)
+        : null;
+
+    const normalizedAttendanceClosedAt = attendanceClosedAt
+      ? this.normalizeAttendanceBoundary(attendanceClosedAt)
+      : null;
+
+    if (!normalizedAttendanceClosedAt) {
+      return true;
+    }
+
+    return normalizedStartDate.getTime() < normalizedAttendanceClosedAt.getTime();
   }
 
   private async getReferentialAttendanceClosures(
