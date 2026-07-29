@@ -36,9 +36,12 @@ export class AttendanceService {
     private eventsService: EventsService,
   ) {}
 
-  private getAnalyticsDateRange(
-    period: "week" | "month" | "quarter" = "month",
-  ) {
+  private getAnalyticsDateRange(params: {
+    period?: "week" | "month" | "quarter" | "year" | "custom";
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const period = params.period || "month";
     const now = new Date();
     const endDate = new Date(now);
     endDate.setHours(23, 59, 59, 999);
@@ -46,11 +49,47 @@ export class AttendanceService {
     const startDate = new Date(now);
     startDate.setHours(0, 0, 0, 0);
 
+    if (period === "custom") {
+      if (!params.startDate || !params.endDate) {
+        throw new BadRequestException(
+          "Les dates de début et de fin sont requises pour une période personnalisée",
+        );
+      }
+
+      const customStartDate = new Date(params.startDate);
+      const customEndDate = new Date(params.endDate);
+
+      if (
+        Number.isNaN(customStartDate.getTime()) ||
+        Number.isNaN(customEndDate.getTime())
+      ) {
+        throw new BadRequestException("Période personnalisée invalide");
+      }
+
+      customStartDate.setHours(0, 0, 0, 0);
+      customEndDate.setHours(23, 59, 59, 999);
+
+      if (customStartDate.getTime() > customEndDate.getTime()) {
+        throw new BadRequestException(
+          "La date de début doit être antérieure ou égale à la date de fin",
+        );
+      }
+
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate,
+      };
+    }
+
     switch (period) {
       case "week": {
         const day = startDate.getDay();
         const diffToMonday = day === 0 ? 6 : day - 1;
         startDate.setDate(startDate.getDate() - diffToMonday);
+        break;
+      }
+      case "year": {
+        startDate.setMonth(0, 1);
         break;
       }
       case "quarter": {
@@ -65,6 +104,401 @@ export class AttendanceService {
     }
 
     return { startDate, endDate };
+  }
+
+  private sortMostRegular<
+    T extends {
+      attendanceRate: number;
+      presentCount: number;
+      lateCount: number;
+      absenceCount: number;
+    },
+  >(rows: T[]): T[] {
+    return [...rows].sort(
+      (a, b) =>
+        b.attendanceRate - a.attendanceRate ||
+        b.presentCount - a.presentCount ||
+        a.lateCount - b.lateCount ||
+        a.absenceCount - b.absenceCount,
+    );
+  }
+
+  private async computeAttendanceLeaderboard(params: {
+    period?: "week" | "month" | "quarter" | "year" | "custom";
+    promotionId?: string;
+    referentialId?: string;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const period = params.period || "month";
+    const limit =
+      params.limit && params.limit > 0 ? Math.min(params.limit, 20) : 5;
+    const { startDate, endDate } = this.getAnalyticsDateRange({
+      period,
+      startDate: params.startDate,
+      endDate: params.endDate,
+    });
+
+    const learners = await this.prisma.learner.findMany({
+      where: {
+        status: {
+          in: ["ACTIVE", "REPLACEMENT"],
+        },
+        ...(params.promotionId ? { promotionId: params.promotionId } : {}),
+        ...(params.referentialId ? { refId: params.referentialId } : {}),
+      },
+      include: {
+        promotion: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        referential: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const referentialIds = Array.from(
+      new Set(
+        learners
+          .map((learner) => learner.refId)
+          .filter((refId): refId is string => Boolean(refId)),
+      ),
+    );
+    const referentialAttendanceClosures =
+      await this.getReferentialAttendanceClosures(referentialIds);
+    const learnerPromotionIds = new Map(
+      learners.map((learner) => [learner.id, learner.promotionId ?? null]),
+    );
+    const promotionIds = Array.from(
+      new Set(
+        learners
+          .map((learner) => learner.promotionId)
+          .filter((promotionId): promotionId is string => Boolean(promotionId)),
+      ),
+    );
+    const blockedAttendanceDaysByPromotion =
+      await this.eventsService.getBlockedDateKeysByPromotion(
+        promotionIds,
+        startDate,
+        endDate,
+        "attendance",
+      );
+    const activeLearners = learners.filter((learner) =>
+      this.isLearnerExpectedForAttendanceOnDate(
+        learner,
+        referentialAttendanceClosures,
+        endDate,
+      ),
+    );
+
+    if (activeLearners.length === 0) {
+      return {
+        period,
+        range: {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        },
+        filters: {
+          promotionId: params.promotionId || null,
+          referentialId: params.referentialId || null,
+          limit,
+        },
+        expectedDays: 0,
+        learnersWithStats: [],
+        mostAbsent: [],
+        mostLate: [],
+        mostRegular: [],
+      };
+    }
+
+    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+        learnerId: {
+          in: activeLearners.map((learner) => learner.id),
+        },
+      },
+    });
+
+    const replacementLearnerIds = activeLearners
+      .filter((learner) => learner.status === LearnerStatus.REPLACEMENT)
+      .map((learner) => learner.id);
+
+    const firstReplacementScans =
+      replacementLearnerIds.length > 0
+        ? await this.prisma.learnerAttendance.findMany({
+            where: {
+              learnerId: {
+                in: replacementLearnerIds,
+              },
+              scanTime: {
+                not: null,
+              },
+            },
+            orderBy: [{ learnerId: "asc" }, { scanTime: "asc" }],
+            select: {
+              learnerId: true,
+              scanTime: true,
+              date: true,
+            },
+          })
+        : [];
+
+    const replacementStartDates = new Map<string, Date>();
+    firstReplacementScans.forEach((scan) => {
+      if (replacementStartDates.has(scan.learnerId)) {
+        return;
+      }
+
+      replacementStartDates.set(
+        scan.learnerId,
+        this.normalizeAttendanceBoundary(scan.scanTime ?? scan.date),
+      );
+    });
+
+    const learnersMap = new Map<
+      string,
+      {
+        learnerId: string;
+        firstName: string;
+        lastName: string;
+        matricule: string;
+        photoUrl: string | null;
+        promotion: { id: string; name: string } | null;
+        referential: { id: string; name: string } | null;
+        absenceCount: number;
+        lateCount: number;
+        presentCount: number;
+        totalRecords: number;
+        expectedDays: number;
+        attendedDays: Set<string>;
+        attendanceRate: number;
+      }
+    >(
+      activeLearners.map((learner) => [
+        learner.id,
+        {
+          learnerId: learner.id,
+          firstName: learner.firstName,
+          lastName: learner.lastName,
+          matricule: learner.matricule,
+          photoUrl: learner.photoUrl,
+          promotion: learner.promotion
+            ? { id: learner.promotion.id, name: learner.promotion.name }
+            : null,
+          referential: learner.referential
+            ? { id: learner.referential.id, name: learner.referential.name }
+            : null,
+          absenceCount: 0,
+          lateCount: 0,
+          presentCount: 0,
+          totalRecords: 0,
+          expectedDays: 0,
+          attendedDays: new Set<string>(),
+          attendanceRate: 0,
+        },
+      ]),
+    );
+
+    const cohortExpectedDays = new Set(
+      attendanceRecords
+        .filter((record) => {
+          if (!this.isInstructionDay(record.date)) {
+            return false;
+          }
+
+          const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
+          const blockedDays = learnerPromotionId
+            ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
+            : undefined;
+
+          return !blockedDays?.has(this.getAttendanceDayKey(record.date));
+        })
+        .map((record) => this.getAttendanceDayKey(record.date)),
+    );
+
+    const attendanceByLearnerDay = new Map<
+      string,
+      (typeof attendanceRecords)[number]
+    >();
+
+    attendanceRecords.forEach((record) => {
+      const existingLearner = learnersMap.get(record.learnerId);
+      if (!existingLearner) {
+        return;
+      }
+
+      if (!this.isInstructionDay(record.date)) {
+        return;
+      }
+
+      const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
+      const blockedDays = learnerPromotionId
+        ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
+        : undefined;
+
+      if (blockedDays?.has(this.getAttendanceDayKey(record.date))) {
+        return;
+      }
+
+      const learnerData = activeLearners.find(
+        (learner) => learner.id === record.learnerId,
+      );
+      const learnerStartDate = learnerData
+        ? this.getLearnerAnalyticsStartDate(
+            learnerData,
+            replacementStartDates.get(record.learnerId) ?? null,
+          )
+        : null;
+
+      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+        return;
+      }
+
+      const dateKey = this.getAttendanceDayKey(record.date);
+      const mapKey = `${record.learnerId}:${dateKey}`;
+      const existingRecord = attendanceByLearnerDay.get(mapKey);
+      const recordTimestamp =
+        record.updatedAt?.getTime?.() ?? record.date.getTime();
+      const existingTimestamp =
+        existingRecord?.updatedAt?.getTime?.() ??
+        existingRecord?.date.getTime?.() ??
+        0;
+
+      if (!existingRecord || recordTimestamp > existingTimestamp) {
+        attendanceByLearnerDay.set(mapKey, record);
+      }
+    });
+
+    attendanceByLearnerDay.forEach((record) => {
+      const existingLearner = learnersMap.get(record.learnerId);
+      if (!existingLearner) {
+        return;
+      }
+
+      existingLearner.totalRecords += 1;
+
+      const dateKey = this.getAttendanceDayKey(record.date);
+
+      if (record.isPresent) {
+        existingLearner.attendedDays.add(dateKey);
+        existingLearner.presentCount += 1;
+      }
+
+      if (record.isLate) {
+        existingLearner.lateCount += 1;
+      }
+    });
+
+    activeLearners.forEach((learner) => {
+      const existingLearner = learnersMap.get(learner.id);
+      if (!existingLearner) {
+        return;
+      }
+
+      const learnerStartDate = this.getLearnerAnalyticsStartDate(
+        learner,
+        replacementStartDates.get(learner.id) ?? null,
+      );
+
+      if (!learnerStartDate) {
+        existingLearner.expectedDays = 0;
+        return;
+      }
+
+      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
+        (dayKey) => {
+          const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
+          return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
+        },
+      ).length;
+    });
+
+    const learnersWithStats = Array.from(learnersMap.values()).map(
+      (learner) => {
+        const inferredAbsenceCount = Math.max(
+          learner.expectedDays - learner.attendedDays.size,
+          0,
+        );
+        const attendanceRate =
+          learner.expectedDays > 0
+            ? Number(
+                (
+                  (learner.attendedDays.size / learner.expectedDays) *
+                  100
+                ).toFixed(2),
+              )
+            : 0;
+
+        return {
+          learnerId: learner.learnerId,
+          firstName: learner.firstName,
+          lastName: learner.lastName,
+          matricule: learner.matricule,
+          photoUrl: learner.photoUrl,
+          promotion: learner.promotion,
+          referential: learner.referential,
+          absenceCount: inferredAbsenceCount,
+          lateCount: learner.lateCount,
+          presentCount: learner.presentCount,
+          totalRecords: learner.totalRecords,
+          attendanceRate,
+        };
+      },
+    );
+
+    const mostAbsent = [...learnersWithStats]
+      .sort(
+        (a, b) =>
+          b.absenceCount - a.absenceCount ||
+          b.lateCount - a.lateCount ||
+          a.attendanceRate - b.attendanceRate,
+      )
+      .filter((learner) => learner.absenceCount > 0)
+      .slice(0, limit);
+
+    const mostLate = [...learnersWithStats]
+      .sort(
+        (a, b) =>
+          b.lateCount - a.lateCount ||
+          b.absenceCount - a.absenceCount ||
+          a.attendanceRate - b.attendanceRate,
+      )
+      .filter((learner) => learner.lateCount > 0)
+      .slice(0, limit);
+
+    const sortedMostRegular = this.sortMostRegular(learnersWithStats).filter(
+      (learner) => learner.presentCount > 0,
+    );
+
+    return {
+      period,
+      range: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      },
+      filters: {
+        promotionId: params.promotionId || null,
+        referentialId: params.referentialId || null,
+        limit,
+      },
+      expectedDays: cohortExpectedDays.size,
+      learnersWithStats,
+      mostAbsent,
+      mostLate,
+      mostRegular: sortedMostRegular.slice(0, limit),
+      sortedMostRegular,
+    };
   }
 
   private getAttendanceDayKey(date: Date): string {
@@ -1406,31 +1840,41 @@ export class AttendanceService {
   }
 
   async getAtRiskLearners(params: {
-    period?: "week" | "month" | "quarter";
+    period?: "week" | "month" | "quarter" | "year" | "custom";
     promotionId?: string;
     referentialId?: string;
     limit?: number;
+    startDate?: string;
+    endDate?: string;
   }) {
-    const period = params.period || "month";
-    const limit =
-      params.limit && params.limit > 0 ? Math.min(params.limit, 20) : 5;
-    const { startDate, endDate } = this.getAnalyticsDateRange(period);
+    const leaderboard = await this.computeAttendanceLeaderboard(params);
 
-    const learners = await this.prisma.learner.findMany({
+    return {
+      period: leaderboard.period,
+      range: leaderboard.range,
+      filters: leaderboard.filters,
+      expectedDays: leaderboard.expectedDays,
+      mostAbsent: leaderboard.mostAbsent,
+      mostLate: leaderboard.mostLate,
+      mostRegular: leaderboard.mostRegular,
+    };
+  }
+
+  async getLearnerRegularityLeaderboard(
+    email: string,
+    params?: {
+      period?: "week" | "month" | "quarter" | "year" | "custom";
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
+    const learner = await this.prisma.learner.findFirst({
       where: {
-        status: {
-          in: ["ACTIVE", "REPLACEMENT"],
+        user: {
+          email,
         },
-        ...(params.promotionId ? { promotionId: params.promotionId } : {}),
-        ...(params.referentialId ? { refId: params.referentialId } : {}),
       },
       include: {
-        promotion: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
         referential: {
           select: {
             id: true,
@@ -1440,344 +1884,56 @@ export class AttendanceService {
       },
     });
 
-    const referentialIds = Array.from(
-      new Set(
-        learners
-          .map((learner) => learner.refId)
-          .filter((refId): refId is string => Boolean(refId)),
-      ),
-    );
-    const referentialAttendanceClosures =
-      await this.getReferentialAttendanceClosures(referentialIds);
-    const learnerPromotionIds = new Map(
-      learners.map((learner) => [learner.id, learner.promotionId ?? null]),
-    );
-    const promotionIds = Array.from(
-      new Set(
-        learners
-          .map((learner) => learner.promotionId)
-          .filter((promotionId): promotionId is string => Boolean(promotionId)),
-      ),
-    );
-    const blockedAttendanceDaysByPromotion =
-      await this.eventsService.getBlockedDateKeysByPromotion(
-        promotionIds,
-        startDate,
-        endDate,
-        "attendance",
-      );
-    const activeLearners = learners.filter((learner) =>
-      this.isLearnerExpectedForAttendanceOnDate(
-        learner,
-        referentialAttendanceClosures,
-        endDate,
-      ),
-    );
+    if (!learner) {
+      throw new NotFoundException("Apprenant non trouvé");
+    }
 
-    if (activeLearners.length === 0) {
+    if (!learner.refId) {
       return {
-        period,
+        period: params?.period || "month",
         range: {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          startDate: "",
+          endDate: "",
         },
-        filters: {
-          promotionId: params.promotionId || null,
-          referentialId: params.referentialId || null,
-          limit,
-        },
-        expectedDays: 0,
-        mostAbsent: [],
-        mostLate: [],
-        mostRegular: [],
+        referential: null,
+        totalLearners: 0,
+        learner: null,
+        topRegular: [],
       };
     }
 
-    const attendanceRecords = await this.prisma.learnerAttendance.findMany({
-      where: {
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-        learnerId: {
-          in: activeLearners.map((learner) => learner.id),
-        },
-      },
+    const leaderboard = await this.computeAttendanceLeaderboard({
+      period: params?.period || "month",
+      startDate: params?.startDate,
+      endDate: params?.endDate,
+      referentialId: learner.refId,
+      limit: 5,
     });
 
-    const replacementLearnerIds = activeLearners
-      .filter((learner) => learner.status === LearnerStatus.REPLACEMENT)
-      .map((learner) => learner.id);
-
-    const firstReplacementScans =
-      replacementLearnerIds.length > 0
-        ? await this.prisma.learnerAttendance.findMany({
-            where: {
-              learnerId: {
-                in: replacementLearnerIds,
-              },
-              scanTime: {
-                not: null,
-              },
-            },
-            orderBy: [{ learnerId: "asc" }, { scanTime: "asc" }],
-            select: {
-              learnerId: true,
-              scanTime: true,
-              date: true,
-            },
-          })
-        : [];
-
-    const replacementStartDates = new Map<string, Date>();
-    firstReplacementScans.forEach((scan) => {
-      if (replacementStartDates.has(scan.learnerId)) {
-        return;
-      }
-
-      replacementStartDates.set(
-        scan.learnerId,
-        this.normalizeAttendanceBoundary(scan.scanTime ?? scan.date),
-      );
-    });
-
-    const learnersMap = new Map<
-      string,
-      {
-        learnerId: string;
-        firstName: string;
-        lastName: string;
-        matricule: string;
-        photoUrl: string | null;
-        promotion: { id: string; name: string } | null;
-        referential: { id: string; name: string } | null;
-        absenceCount: number;
-        lateCount: number;
-        presentCount: number;
-        totalRecords: number;
-        expectedDays: number;
-        attendedDays: Set<string>;
-        attendanceRate: number;
-      }
-    >(
-      activeLearners.map((learner) => [
-        learner.id,
-        {
-          learnerId: learner.id,
-          firstName: learner.firstName,
-          lastName: learner.lastName,
-          matricule: learner.matricule,
-          photoUrl: learner.photoUrl,
-          promotion: learner.promotion
-            ? { id: learner.promotion.id, name: learner.promotion.name }
-            : null,
-          referential: learner.referential
-            ? { id: learner.referential.id, name: learner.referential.name }
-            : null,
-          absenceCount: 0,
-          lateCount: 0,
-          presentCount: 0,
-          totalRecords: 0,
-          expectedDays: 0,
-          attendedDays: new Set<string>(),
-          attendanceRate: 0,
-        },
-      ]),
+    const rankedLearners = leaderboard.sortedMostRegular;
+    const learnerIndex = rankedLearners.findIndex(
+      (row) => row.learnerId === learner.id,
     );
-
-    const cohortExpectedDays = new Set(
-      attendanceRecords
-        .filter((record) => {
-          if (!this.isInstructionDay(record.date)) {
-            return false;
-          }
-
-          const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
-          const blockedDays = learnerPromotionId
-            ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
-            : undefined;
-
-          return !blockedDays?.has(this.getAttendanceDayKey(record.date));
-        })
-        .map((record) => this.getAttendanceDayKey(record.date)),
-    );
-
-    const attendanceByLearnerDay = new Map<
-      string,
-      (typeof attendanceRecords)[number]
-    >();
-
-    attendanceRecords.forEach((record) => {
-      const existingLearner = learnersMap.get(record.learnerId);
-      if (!existingLearner) {
-        return;
-      }
-
-      if (!this.isInstructionDay(record.date)) {
-        return;
-      }
-
-      const learnerPromotionId = learnerPromotionIds.get(record.learnerId);
-      const blockedDays = learnerPromotionId
-        ? blockedAttendanceDaysByPromotion.get(learnerPromotionId)
-        : undefined;
-
-      if (blockedDays?.has(this.getAttendanceDayKey(record.date))) {
-        return;
-      }
-
-      const learnerData = activeLearners.find(
-        (learner) => learner.id === record.learnerId,
-      );
-      const learnerStartDate = learnerData
-        ? this.getLearnerAnalyticsStartDate(
-            learnerData,
-            replacementStartDates.get(record.learnerId) ?? null,
-          )
-        : null;
-
-      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
-        return;
-      }
-
-      const dateKey = this.getAttendanceDayKey(record.date);
-      const mapKey = `${record.learnerId}:${dateKey}`;
-      const existingRecord = attendanceByLearnerDay.get(mapKey);
-      const recordTimestamp =
-        record.updatedAt?.getTime?.() ?? record.date.getTime();
-      const existingTimestamp =
-        existingRecord?.updatedAt?.getTime?.() ??
-        existingRecord?.date.getTime?.() ??
-        0;
-
-      if (!existingRecord || recordTimestamp > existingTimestamp) {
-        attendanceByLearnerDay.set(mapKey, record);
-      }
-    });
-
-    attendanceByLearnerDay.forEach((record) => {
-      const existingLearner = learnersMap.get(record.learnerId);
-      if (!existingLearner) {
-        return;
-      }
-
-      existingLearner.totalRecords += 1;
-
-      const dateKey = this.getAttendanceDayKey(record.date);
-
-      if (record.isPresent) {
-        existingLearner.attendedDays.add(dateKey);
-        existingLearner.presentCount += 1;
-      }
-
-      if (record.isLate) {
-        existingLearner.lateCount += 1;
-      }
-    });
-
-    activeLearners.forEach((learner) => {
-      const existingLearner = learnersMap.get(learner.id);
-      if (!existingLearner) {
-        return;
-      }
-
-      const learnerStartDate = this.getLearnerAnalyticsStartDate(
-        learner,
-        replacementStartDates.get(learner.id) ?? null,
-      );
-
-      if (!learnerStartDate) {
-        existingLearner.expectedDays = 0;
-        return;
-      }
-
-      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
-        (dayKey) => {
-          const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
-          return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
-        },
-      ).length;
-    });
-
-    const learnersWithStats = Array.from(learnersMap.values()).map(
-      (learner) => {
-        const inferredAbsenceCount = Math.max(
-          learner.expectedDays - learner.attendedDays.size,
-          0,
-        );
-        const attendanceRate =
-          learner.expectedDays > 0
-            ? Number(
-                (
-                  (learner.attendedDays.size / learner.expectedDays) *
-                  100
-                ).toFixed(2),
-              )
-            : 0;
-
-        return {
-          learnerId: learner.learnerId,
-          firstName: learner.firstName,
-          lastName: learner.lastName,
-          matricule: learner.matricule,
-          photoUrl: learner.photoUrl,
-          promotion: learner.promotion,
-          referential: learner.referential,
-          absenceCount: inferredAbsenceCount,
-          lateCount: learner.lateCount,
-          presentCount: learner.presentCount,
-          totalRecords: learner.totalRecords,
-          attendanceRate,
-        };
-      },
-    );
-
-    const mostAbsent = [...learnersWithStats]
-      .sort(
-        (a, b) =>
-          b.absenceCount - a.absenceCount ||
-          b.lateCount - a.lateCount ||
-          a.attendanceRate - b.attendanceRate,
-      )
-      .filter((learner) => learner.absenceCount > 0)
-      .slice(0, limit);
-
-    const mostLate = [...learnersWithStats]
-      .sort(
-        (a, b) =>
-          b.lateCount - a.lateCount ||
-          b.absenceCount - a.absenceCount ||
-          a.attendanceRate - b.attendanceRate,
-      )
-      .filter((learner) => learner.lateCount > 0)
-      .slice(0, limit);
-
-    const mostRegular = [...learnersWithStats]
-      .sort(
-        (a, b) =>
-          b.attendanceRate - a.attendanceRate ||
-          b.presentCount - a.presentCount ||
-          a.lateCount - b.lateCount ||
-          a.absenceCount - b.absenceCount,
-      )
-      .filter((learner) => learner.presentCount > 0)
-      .slice(0, limit);
+    const rankedLearner =
+      learnerIndex >= 0 ? rankedLearners[learnerIndex] : null;
 
     return {
-      period,
-      range: {
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      },
-      filters: {
-        promotionId: params.promotionId || null,
-        referentialId: params.referentialId || null,
-        limit,
-      },
-      expectedDays: cohortExpectedDays.size,
-      mostAbsent,
-      mostLate,
-      mostRegular,
+      period: leaderboard.period,
+      range: leaderboard.range,
+      referential: learner.referential
+        ? {
+            id: learner.referential.id,
+            name: learner.referential.name,
+          }
+        : null,
+      totalLearners: rankedLearners.length,
+      learner: rankedLearner
+        ? {
+            ...rankedLearner,
+            rank: learnerIndex + 1,
+          }
+        : null,
+      topRegular: rankedLearners.slice(0, 5),
     };
   }
 
