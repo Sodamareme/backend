@@ -232,8 +232,7 @@ export class LearnersController {
   @ApiResponse({ status: 200, description: 'Returns the learner' })
   @ApiResponse({ status: 404, description: 'Learner not found' })
   @ApiResponse({ status: 403, description: 'Forbidden - Can only access own data' })
-  async findByEmail(@Param('email') email: string, @Request() req): Promise<Learner> {
-    this.logger.debug(`Looking up learner by email: ${email}`);
+  async findByEmail(@Param('email') email: string, @Request() req): Promise<unknown> {
     if (req.user.role !== UserRole.ADMIN && req.user.email !== email) {
       throw new ForbiddenException('You can only access your own data');
     }

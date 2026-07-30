@@ -1080,14 +1080,38 @@ export class LearnersService {
     return learner;
   }
 
-  async findByEmail(email: string): Promise<Learner> {
+  async findByEmail(email: string) {
     const learners = await this.prisma.learner.findMany({
       where: { user: { email } },
       orderBy: {
         createdAt: 'desc',
       },
-      include: {
-        user: true,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        address: true,
+        gender: true,
+        birthDate: true,
+        birthPlace: true,
+        phone: true,
+        photoUrl: true,
+        status: true,
+        qrCode: true,
+        matricule: true,
+        userId: true,
+        refId: true,
+        promotionId: true,
+        sessionId: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+          },
+        },
         referential: true,
         promotion: true,
         tutor: true,
