@@ -245,6 +245,33 @@ export class ModulesService {
   }
 
   /**
+   * Modules rattachés au référentiel de l’apprenant
+   */
+  async getActiveModulesByLearner(learnerId: string): Promise<Module[]> {
+    const learner = await this.prisma.learner.findUnique({
+      where: { id: learnerId },
+      select: { id: true, refId: true },
+    });
+
+    if (!learner) {
+      throw new NotFoundException('Apprenant non trouvé');
+    }
+
+    if (!learner.refId) {
+      return [];
+    }
+
+    return this.prisma.module.findMany({
+      where: { refId: learner.refId },
+      orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        referential: { select: { id: true, name: true } },
+        coach: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /**
    * Modules par référentiel
    */
   async getModulesByReferential(refId: string): Promise<Module[]> {

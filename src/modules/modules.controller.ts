@@ -74,6 +74,12 @@ export class ModulesController {
     return this.modulesService.getActiveModules();
   }
 
+  @Get('active/learner/:learnerId')
+  @ApiOperation({ summary: 'Récupérer les modules d’un apprenant' })
+  async getActiveModulesByLearner(@Param('learnerId') learnerId: string) {
+    return this.modulesService.getActiveModulesByLearner(learnerId);
+  }
+
   @Get('referential/:refId')
   @ApiOperation({ summary: 'Récupérer les modules par référentiel' })
   async getModulesByReferential(@Param('refId') refId: string) {
