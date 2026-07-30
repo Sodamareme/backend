@@ -56,6 +56,13 @@ export class PendingLearnersService {
     }
   }
 
+  private toPublicSubmissionResponse() {
+    return {
+      success: true,
+      message: 'Votre inscription sera verifiee par l administration avant activation.',
+    };
+  }
+
   async createPendingLearner(
     dto: CreatePendingLearnerDto,
     photoFile?: Express.Multer.File,
@@ -199,7 +206,7 @@ export class PendingLearnersService {
         ),
     );
 
-    return pendingLearner;
+    return this.toPublicSubmissionResponse();
   }
 
   async getPendingLearners(status?: PendingStatus) {
