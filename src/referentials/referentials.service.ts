@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Referential } from '@prisma/client';
 import { CreateReferentialDto } from './dto/create-referential.dto';
-import { ReferentialWithRelations } from './interfaces/referential.interface';
+import { PublicReferential, ReferentialWithRelations } from './interfaces/referential.interface';
 import { ReferentialStats, SessionStats } from './interfaces/referential-stats.interface';
 
 @Injectable()
@@ -145,7 +145,7 @@ export class ReferentialsService {
     } as ReferentialWithRelations;
   }
 
-  async findOnePublic(id: string): Promise<Referential> {
+  async findOnePublic(id: string): Promise<PublicReferential> {
     const referential = await this.prisma.referential.findUnique({
       where: { id },
       select: {
@@ -176,7 +176,7 @@ export class ReferentialsService {
     return {
       ...referential,
       attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
-    } as Referential;
+    };
   }
 
   async update(id: string, data: Prisma.ReferentialUpdateInput & { attendanceClosedAt?: Date | string | null }): Promise<Referential> {
