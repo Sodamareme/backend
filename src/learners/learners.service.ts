@@ -1132,24 +1132,6 @@ export class LearnersService {
             polo: true,
           },
         },
-        attendances: {
-          where: {
-            OR: [{ justification: { not: null } }, { documentUrl: { not: null } }],
-          },
-          select: {
-            id: true,
-            date: true,
-            isPresent: true,
-            isLate: true,
-            justification: true,
-            status: true,
-            documentUrl: true,
-            justificationComment: true,
-          },
-          orderBy: {
-            date: 'desc',
-          },
-        },
       },
     });
 
