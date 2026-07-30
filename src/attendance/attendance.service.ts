@@ -1443,11 +1443,13 @@ export class AttendanceService {
         `Getting absents for referential ${referentialId} on ${date}`,
       );
 
-      // 1️⃣ Récupère UNIQUEMENT les apprenants du référentiel sélectionné
+      // 1️⃣ Récupère les apprenants attendus du référentiel sélectionné
       const learners = await this.prisma.learner.findMany({
         where: {
           refId: referentialId, // ✅ FILTRE PAR RÉFÉRENTIEL
-          status: "ACTIVE",
+          status: {
+            in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+          },
         },
         select: {
           id: true,
@@ -1502,12 +1504,12 @@ export class AttendanceService {
           referentialId,
           totalAbsents: 0,
           absents: [],
-          message: "Aucun apprenant actif dans ce référentiel.",
+          message: "Aucun apprenant attendu dans ce référentiel.",
         };
       }
 
       this.logger.log(
-        `Found ${learners.length} active learners in referential ${referentialId}`,
+        `Found ${learners.length} expected learners in referential ${referentialId}`,
       );
 
       // 2️⃣ Récupère les présences du jour UNIQUEMENT pour ces apprenants
@@ -1570,8 +1572,12 @@ export class AttendanceService {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
 
-      // ✅ 1. Récupérer tous les apprenants actifs
-      const learnersWhere: any = { status: "ACTIVE" };
+      // ✅ 1. Récupérer tous les apprenants attendus
+      const learnersWhere: any = {
+        status: {
+          in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+        },
+      };
       if (referentialId) learnersWhere.refId = referentialId;
 
       const allLearners = await this.prisma.learner.findMany({
