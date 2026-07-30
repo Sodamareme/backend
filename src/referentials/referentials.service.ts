@@ -148,9 +148,22 @@ export class ReferentialsService {
   async findOnePublic(id: string): Promise<Referential> {
     const referential = await this.prisma.referential.findUnique({
       where: { id },
-      include: {
-        sessions: true,
-        modules: true,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        photoUrl: true,
+        capacity: true,
+        modules: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            photoUrl: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
       },
     });
 
