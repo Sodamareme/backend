@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -86,5 +87,12 @@ export class PendingLearnersController {
     @Body('reason') reason?: string,
   ) {
     return this.pendingLearnersService.rejectPendingLearner(id, req.user.userId, reason);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deletePendingLearner(@Param('id') id: string) {
+    return this.pendingLearnersService.deletePendingLearner(id);
   }
 }

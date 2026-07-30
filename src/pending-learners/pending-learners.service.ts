@@ -310,4 +310,20 @@ export class PendingLearnersService {
       message: "Demande d'inscription rejetee",
     };
   }
+
+  async deletePendingLearner(id: string) {
+    const pendingLearner = await this.getPendingLearnerById(id);
+
+    if (pendingLearner.photoUrl) {
+      await this.cloudinaryService.deleteFileByUrl(pendingLearner.photoUrl).catch(() => undefined);
+    }
+
+    await this.prisma.pendingLearner.delete({
+      where: { id },
+    });
+
+    return {
+      message: "Demande d'inscription supprimee definitivement",
+    };
+  }
 }
