@@ -1099,26 +1099,57 @@ export class LearnersService {
         status: true,
         qrCode: true,
         matricule: true,
-        userId: true,
-        refId: true,
-        promotionId: true,
-        sessionId: true,
-        createdAt: true,
-        updatedAt: true,
         user: {
           select: {
-            id: true,
             email: true,
-            role: true,
           },
         },
-        referential: true,
-        promotion: true,
-        tutor: true,
-        kit: true,
-        attendances: true,
-        grades: true,
-        documents: true,
+        referential: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        promotion: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        tutor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            phone: true,
+            address: true,
+          },
+        },
+        kit: {
+          select: {
+            laptop: true,
+            charger: true,
+            bag: true,
+            polo: true,
+          },
+        },
+        attendances: {
+          where: {
+            OR: [{ justification: { not: null } }, { documentUrl: { not: null } }],
+          },
+          select: {
+            id: true,
+            date: true,
+            isPresent: true,
+            isLate: true,
+            justification: true,
+            status: true,
+            documentUrl: true,
+            justificationComment: true,
+          },
+          orderBy: {
+            date: 'desc',
+          },
+        },
       },
     });
 
