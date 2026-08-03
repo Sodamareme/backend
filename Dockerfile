@@ -39,6 +39,7 @@ RUN npm install --omit=dev
 # Copier Prisma généré
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/prisma ./prisma
 
 # Copier build compilé
 COPY --from=builder /app/dist ./dist
