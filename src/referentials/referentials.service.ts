@@ -112,10 +112,10 @@ export class ReferentialsService {
   }
 
    async findAllReferentials(): Promise<Referential[]> {
-    return this.prisma.referential.findMany({
-     
-    });
-  }
+     return this.prisma.referential.findMany({
+      
+     });
+   }
 
   async findOne(id: string): Promise<ReferentialWithRelations> {
     const referential = await this.prisma.referential.findUnique({
@@ -214,6 +214,30 @@ export class ReferentialsService {
             ? null
             : new Date(attendanceClosedAt as string | Date),
     } as Referential;
+  }
+
+  async updateSessionAttendanceClosure(
+    referentialId: string,
+    sessionId: string,
+    attendanceClosedAt: Date | string | null,
+  ) {
+    const referential = await this.findOne(referentialId);
+    const session = referential.sessions?.find((item) => item.id === sessionId);
+
+    if (!session) {
+      throw new NotFoundException('Session introuvable pour ce référentiel');
+    }
+
+    const normalizedAttendanceClosedAt =
+      attendanceClosedAt === null
+        ? null
+        : new Date(attendanceClosedAt as string | Date);
+
+    await this.prisma.$executeRaw(
+      Prisma.sql`UPDATE "Session" SET "attendanceClosedAt" = ${normalizedAttendanceClosedAt}, "updatedAt" = NOW() WHERE id = ${sessionId} AND "referentialId" = ${referentialId}`,
+    );
+
+    return this.findOne(referentialId);
   }
 
   async getStatistics(id: string): Promise<ReferentialStats> {

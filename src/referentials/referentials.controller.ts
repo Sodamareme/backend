@@ -158,4 +158,19 @@ export class ReferentialsController {
 
     return this.referentialsService.update(id, data);
   }
+
+  @Put(':id/sessions/:sessionId/attendance-closure')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Mettre à jour la clôture de présence d\'une session' })
+  async updateSessionAttendanceClosure(
+    @Param('id') id: string,
+    @Param('sessionId') sessionId: string,
+    @Body() data: { attendanceClosedAt?: string | null },
+  ) {
+    return this.referentialsService.updateSessionAttendanceClosure(
+      id,
+      sessionId,
+      data.attendanceClosedAt ?? null,
+    );
+  }
 }

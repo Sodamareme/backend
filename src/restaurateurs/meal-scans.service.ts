@@ -43,6 +43,12 @@ type ZonedDateParts = {
   second: number;
 };
 
+type AttendanceSessionInfo = {
+  startDate: Date | null;
+  endDate: Date | null;
+  attendanceClosedAt: Date | null;
+};
+
 @Injectable()
 export class MealScansService {
   constructor(
@@ -335,38 +341,116 @@ export class MealScansService {
     return normalizedDate;
   }
 
-  private async getReferentialAttendanceClosure(refId?: string | null) {
-    if (!refId) {
-      return null;
+  private async getReferentialAttendanceClosureMap(refIds: string[]) {
+    if (refIds.length === 0) {
+      return new Map<string, Date | null>();
     }
 
-    const rows = await this.prisma.$queryRaw<Array<{ attendanceClosedAt: Date | null }>>(
-      Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${refId} LIMIT 1`,
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; attendanceClosedAt: Date | null }>>(
+      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(refIds)})`,
     );
 
-    return rows[0]?.attendanceClosedAt ?? null;
+    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+  }
+
+  private async getSessionAttendanceInfoMap(sessionIds: string[]) {
+    if (sessionIds.length === 0) {
+      return new Map<string, AttendanceSessionInfo>();
+    }
+
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string;
+      startDate: Date | null;
+      endDate: Date | null;
+      attendanceClosedAt: Date | null;
+    }>>(
+      Prisma.sql`SELECT id, "startDate", "endDate", "attendanceClosedAt" FROM "Session" WHERE id IN (${Prisma.join(sessionIds)})`,
+    );
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          startDate: row.startDate,
+          endDate: row.endDate,
+          attendanceClosedAt: row.attendanceClosedAt,
+        },
+      ]),
+    );
+  }
+
+  private getMealScanBlockReason(
+    learner: {
+      refId?: string | null;
+      sessionId?: string | null;
+      promotionId?: string | null;
+    },
+    referentialAttendanceClosures: Map<string, Date | null>,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
+    serviceDate: Date,
+  ): string | null {
+    const sessionInfo = learner.sessionId
+      ? sessionAttendanceInfoMap.get(learner.sessionId) ?? null
+      : null;
+    const referentialAttendanceClosedAt =
+      learner.refId && referentialAttendanceClosures.has(learner.refId)
+        ? referentialAttendanceClosures.get(learner.refId) ?? null
+        : null;
+    const normalizedServiceDate = this.normalizeDay(serviceDate);
+
+    if (sessionInfo?.startDate) {
+      const sessionStart = this.normalizeDay(sessionInfo.startDate);
+      if (normalizedServiceDate.getTime() < sessionStart.getTime()) {
+        return "Cette session n'est pas encore ouverte. Aucun pointage repas n'est autorisé.";
+      }
+    }
+
+    if (sessionInfo?.endDate) {
+      const sessionEnd = this.normalizeDay(sessionInfo.endDate);
+      if (normalizedServiceDate.getTime() > sessionEnd.getTime()) {
+        return "Cette session est terminée. Aucun pointage repas n'est autorisé.";
+      }
+    }
+
+    if (sessionInfo?.attendanceClosedAt) {
+      const closedAt = this.normalizeDay(sessionInfo.attendanceClosedAt);
+      if (normalizedServiceDate.getTime() >= closedAt.getTime()) {
+        return "Cette session est clôturée. Aucun pointage repas n'est autorisé.";
+      }
+    } else if (!sessionInfo && referentialAttendanceClosedAt) {
+      const closedAt = this.normalizeDay(referentialAttendanceClosedAt);
+      if (normalizedServiceDate.getTime() >= closedAt.getTime()) {
+        return "Ce référentiel est clôturé. Aucun pointage repas n'est autorisé.";
+      }
+    }
+
+    return null;
   }
 
   private async assertMealScanAllowed(
     learner: {
       refId?: string | null;
+      sessionId?: string | null;
       promotionId?: string | null;
     },
     serviceDate: Date,
   ) {
-    const attendanceClosedAt = await this.getReferentialAttendanceClosure(
-      learner.refId,
+    const referentialAttendanceClosures = await this.getReferentialAttendanceClosureMap(
+      learner.refId ? [learner.refId] : [],
+    );
+    const sessionAttendanceInfoMap = await this.getSessionAttendanceInfoMap(
+      learner.sessionId ? [learner.sessionId] : [],
     );
 
-    if (attendanceClosedAt) {
-      const closedAt = this.normalizeDay(attendanceClosedAt);
-      const targetDate = this.normalizeDay(serviceDate);
+    const blockReason = this.getMealScanBlockReason(
+      learner,
+      referentialAttendanceClosures,
+      sessionAttendanceInfoMap,
+      serviceDate,
+    );
 
-      if (targetDate.getTime() >= closedAt.getTime()) {
-        throw new BadRequestException(
-          "Ce référentiel est clôturé. Aucun pointage n'est autorisé.",
-        );
-      }
+    if (blockReason) {
+      throw new BadRequestException(blockReason);
     }
 
     if (!learner.promotionId) {
@@ -392,6 +476,7 @@ export class MealScansService {
       select: {
         id: true,
         refId: true,
+        sessionId: true,
         promotionId: true,
       },
     });

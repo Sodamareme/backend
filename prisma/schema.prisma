@@ -250,6 +250,7 @@ model Session {
   name          String
   startDate     DateTime?
   endDate       DateTime?
+  attendanceClosedAt DateTime?
   referentialId String
   capacity      Int
   createdAt     DateTime    @default(now())

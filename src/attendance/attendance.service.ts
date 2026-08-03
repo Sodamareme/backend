@@ -25,6 +25,12 @@ import {
   EVENT_TYPE_NO_CLASS,
 } from "../events/events.service";
 
+type AttendanceSessionInfo = {
+  startDate: Date | null;
+  endDate: Date | null;
+  attendanceClosedAt: Date | null;
+};
+
 @Injectable()
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
@@ -173,6 +179,15 @@ export class AttendanceService {
     );
     const referentialAttendanceClosures =
       await this.getReferentialAttendanceClosures(referentialIds);
+    const sessionIds = Array.from(
+      new Set(
+        learners
+          .map((learner) => learner.sessionId)
+          .filter((sessionId): sessionId is string => Boolean(sessionId)),
+      ),
+    );
+    const sessionAttendanceInfoMap =
+      await this.getSessionAttendanceInfoMap(sessionIds);
     const learnerPromotionIds = new Map(
       learners.map((learner) => [learner.id, learner.promotionId ?? null]),
     );
@@ -194,6 +209,7 @@ export class AttendanceService {
       this.isLearnerExpectedForAttendanceInRange(
         learner,
         referentialAttendanceClosures,
+        sessionAttendanceInfoMap,
         startDate,
         endDate,
       ),
@@ -558,31 +574,186 @@ export class AttendanceService {
     return this.normalizeAttendanceBoundary(learner.createdAt);
   }
 
-  private isLearnerExpectedForAttendanceOnDate(
+  private async getReferentialAttendanceClosures(
+    referentialIds: string[],
+  ): Promise<Map<string, Date | null>> {
+    if (referentialIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; attendanceClosedAt: Date | null }>
+    >(
+      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(referentialIds)})`,
+    );
+
+    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+  }
+
+  private async getSessionAttendanceInfoMap(
+    sessionIds: string[],
+  ): Promise<Map<string, AttendanceSessionInfo>> {
+    if (sessionIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        startDate: Date | null;
+        endDate: Date | null;
+        attendanceClosedAt: Date | null;
+      }>
+    >(
+      Prisma.sql`SELECT id, "startDate", "endDate", "attendanceClosedAt" FROM "Session" WHERE id IN (${Prisma.join(sessionIds)})`,
+    );
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          startDate: row.startDate,
+          endDate: row.endDate,
+          attendanceClosedAt: row.attendanceClosedAt,
+        },
+      ]),
+    );
+  }
+
+  private getLearnerAttendanceClosureState(
     learner: {
       refId?: string | null;
+      sessionId?: string | null;
+    },
+    referentialAttendanceClosures: Map<string, Date | null>,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
+  ) {
+    const sessionInfo = learner.sessionId
+      ? sessionAttendanceInfoMap.get(learner.sessionId) ?? null
+      : null;
+    const referentialAttendanceClosedAt =
+      learner.refId && referentialAttendanceClosures.has(learner.refId)
+        ? referentialAttendanceClosures.get(learner.refId) ?? null
+        : null;
+
+    return {
+      sessionInfo,
+      normalizedSessionStartDate: sessionInfo?.startDate
+        ? this.normalizeAttendanceBoundary(sessionInfo.startDate)
+        : null,
+      normalizedSessionEndDate: sessionInfo?.endDate
+        ? this.normalizeAttendanceBoundary(sessionInfo.endDate)
+        : null,
+      normalizedSessionClosedAt: sessionInfo?.attendanceClosedAt
+        ? this.normalizeAttendanceBoundary(sessionInfo.attendanceClosedAt)
+        : null,
+      normalizedReferentialClosedAt: referentialAttendanceClosedAt
+        ? this.normalizeAttendanceBoundary(referentialAttendanceClosedAt)
+        : null,
+    };
+  }
+
+  private getLearnerAttendanceBlockMessage(
+    learner: {
+      refId?: string | null;
+      sessionId?: string | null;
       promotionId?: string | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
+    targetDate: Date,
+  ): string | null {
+    const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
+    const closureState = this.getLearnerAttendanceClosureState(
+      learner,
+      referentialAttendanceClosures,
+      sessionAttendanceInfoMap,
+    );
+
+    if (
+      closureState.normalizedSessionStartDate &&
+      normalizedTargetDate.getTime() <
+        closureState.normalizedSessionStartDate.getTime()
+    ) {
+      return "Cette session n'est pas encore ouverte. Aucun pointage n'est autorisé.";
+    }
+
+    if (
+      closureState.normalizedSessionEndDate &&
+      normalizedTargetDate.getTime() >
+        closureState.normalizedSessionEndDate.getTime()
+    ) {
+      return "Cette session est terminée. Aucun pointage n'est autorisé.";
+    }
+
+    if (
+      closureState.normalizedSessionClosedAt &&
+      normalizedTargetDate.getTime() >=
+        closureState.normalizedSessionClosedAt.getTime()
+    ) {
+      return "Cette session est clôturée. Aucun pointage n'est autorisé.";
+    }
+
+    if (
+      !closureState.sessionInfo &&
+      closureState.normalizedReferentialClosedAt &&
+      normalizedTargetDate.getTime() >=
+        closureState.normalizedReferentialClosedAt.getTime()
+    ) {
+      return "Ce référentiel est clôturé. Aucun pointage n'est autorisé.";
+    }
+
+    return null;
+  }
+
+  private isLearnerExpectedForAttendanceOnDate(
+    learner: {
+      refId?: string | null;
+      sessionId?: string | null;
+      promotionId?: string | null;
+    },
+    referentialAttendanceClosures: Map<string, Date | null>,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
     targetDate: Date,
     blockedAttendanceDaysByPromotion?: Map<string, Set<string>>,
   ): boolean {
     const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
     const targetDayKey = this.getAttendanceDayKey(normalizedTargetDate);
-
-    const attendanceClosedAt =
-      learner.refId && referentialAttendanceClosures.has(learner.refId)
-        ? referentialAttendanceClosures.get(learner.refId)
-      : null;
-
-    const normalizedAttendanceClosedAt = attendanceClosedAt
-      ? this.normalizeAttendanceBoundary(attendanceClosedAt)
-      : null;
+    const closureState = this.getLearnerAttendanceClosureState(
+      learner,
+      referentialAttendanceClosures,
+      sessionAttendanceInfoMap,
+    );
 
     if (
-      normalizedAttendanceClosedAt &&
+      closureState.normalizedSessionStartDate &&
+      normalizedTargetDate.getTime() <
+        closureState.normalizedSessionStartDate.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      closureState.normalizedSessionEndDate &&
+      normalizedTargetDate.getTime() >
+        closureState.normalizedSessionEndDate.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      closureState.normalizedSessionClosedAt &&
       normalizedTargetDate.getTime() >=
-        normalizedAttendanceClosedAt.getTime()
+        closureState.normalizedSessionClosedAt.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      !closureState.sessionInfo &&
+      closureState.normalizedReferentialClosedAt &&
+      normalizedTargetDate.getTime() >=
+        closureState.normalizedReferentialClosedAt.getTime()
     ) {
       return false;
     }
@@ -603,51 +774,63 @@ export class AttendanceService {
   private isLearnerExpectedForAttendanceInRange(
     learner: {
       refId?: string | null;
+      sessionId?: string | null;
       promotionId?: string | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
     startDate: Date,
     endDate: Date,
   ): boolean {
     const normalizedStartDate = this.normalizeAttendanceBoundary(startDate);
     const normalizedEndDate = this.normalizeAttendanceBoundary(endDate);
-
-    const attendanceClosedAt =
-      learner.refId && referentialAttendanceClosures.has(learner.refId)
-        ? referentialAttendanceClosures.get(learner.refId)
-        : null;
-
-    const normalizedAttendanceClosedAt = attendanceClosedAt
-      ? this.normalizeAttendanceBoundary(attendanceClosedAt)
-      : null;
-
-    if (!normalizedAttendanceClosedAt) {
-      return true;
-    }
-
-    return normalizedStartDate.getTime() < normalizedAttendanceClosedAt.getTime();
-  }
-
-  private async getReferentialAttendanceClosures(
-    referentialIds: string[],
-  ): Promise<Map<string, Date | null>> {
-    if (referentialIds.length === 0) {
-      return new Map();
-    }
-
-    const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; attendanceClosedAt: Date | null }>
-    >(
-      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(referentialIds)})`,
+    const closureState = this.getLearnerAttendanceClosureState(
+      learner,
+      referentialAttendanceClosures,
+      sessionAttendanceInfoMap,
     );
 
-    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+    if (
+      closureState.normalizedSessionStartDate &&
+      normalizedEndDate.getTime() <
+        closureState.normalizedSessionStartDate.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      closureState.normalizedSessionEndDate &&
+      normalizedStartDate.getTime() >
+        closureState.normalizedSessionEndDate.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      closureState.normalizedSessionClosedAt &&
+      normalizedStartDate.getTime() >=
+        closureState.normalizedSessionClosedAt.getTime()
+    ) {
+      return false;
+    }
+
+    if (
+      !closureState.sessionInfo &&
+      closureState.normalizedReferentialClosedAt &&
+      normalizedStartDate.getTime() >=
+        closureState.normalizedReferentialClosedAt.getTime()
+    ) {
+      return false;
+    }
+
+    return true;
   }
 
   private async getLearnerAttendanceBlockReason(
     learner: {
-      promotionId?: string | null;
       refId?: string | null;
+      sessionId?: string | null;
+      promotionId?: string | null;
     },
     targetDate: Date,
   ): Promise<string | null> {
@@ -655,16 +838,19 @@ export class AttendanceService {
       await this.getReferentialAttendanceClosures(
         learner.refId ? [learner.refId] : [],
       );
+    const sessionAttendanceInfoMap = await this.getSessionAttendanceInfoMap(
+      learner.sessionId ? [learner.sessionId] : [],
+    );
 
-    const isReferentialClosed =
-      !this.isLearnerExpectedForAttendanceOnDate(
-        learner,
-        referentialAttendanceClosures,
-        targetDate,
-      );
+    const blockReason = this.getLearnerAttendanceBlockMessage(
+      learner,
+      referentialAttendanceClosures,
+      sessionAttendanceInfoMap,
+      targetDate,
+    );
 
-    if (isReferentialClosed) {
-      return "Ce référentiel est clôturé. Aucun pointage n'est autorisé.";
+    if (blockReason) {
+      return blockReason;
     }
 
     if (!learner.promotionId) {
@@ -1459,6 +1645,7 @@ export class AttendanceService {
           photoUrl: true,
           address: true,
           refId: true,
+          sessionId: true,
           promotionId: true,
           referential: {
             select: {
@@ -1471,6 +1658,15 @@ export class AttendanceService {
 
       const referentialAttendanceClosures =
         await this.getReferentialAttendanceClosures([referentialId]);
+      const sessionIds = Array.from(
+        new Set(
+          learners
+            .map((learner) => learner.sessionId)
+            .filter((sessionId): sessionId is string => Boolean(sessionId)),
+        ),
+      );
+      const sessionAttendanceInfoMap =
+        await this.getSessionAttendanceInfoMap(sessionIds);
       const promotionIds = Array.from(
         new Set(
           learners
@@ -1490,6 +1686,7 @@ export class AttendanceService {
         this.isLearnerExpectedForAttendanceOnDate(
           learner,
           referentialAttendanceClosures,
+          sessionAttendanceInfoMap,
           targetDate,
           blockedAttendanceDaysByPromotion,
         ),
@@ -1597,6 +1794,15 @@ export class AttendanceService {
 
       const referentialAttendanceClosures =
         await this.getReferentialAttendanceClosures(referentialIds);
+      const sessionIds = Array.from(
+        new Set(
+          allLearners
+            .map((learner) => learner.sessionId)
+            .filter((sessionId): sessionId is string => Boolean(sessionId)),
+        ),
+      );
+      const sessionAttendanceInfoMap =
+        await this.getSessionAttendanceInfoMap(sessionIds);
       const promotionIds = Array.from(
         new Set(
           allLearners
@@ -1616,6 +1822,7 @@ export class AttendanceService {
         this.isLearnerExpectedForAttendanceOnDate(
           learner,
           referentialAttendanceClosures,
+          sessionAttendanceInfoMap,
           targetDate,
           blockedAttendanceDaysByPromotion,
         ),
@@ -2120,6 +2327,15 @@ export class AttendanceService {
       );
       const referentialAttendanceClosures =
         await this.getReferentialAttendanceClosures(referentialIds);
+      const sessionIds = Array.from(
+        new Set(
+          promotion.learners
+            .map((learner) => learner.sessionId)
+            .filter((sessionId): sessionId is string => Boolean(sessionId)),
+        ),
+      );
+      const sessionAttendanceInfoMap =
+        await this.getSessionAttendanceInfoMap(sessionIds);
 
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -2245,6 +2461,7 @@ export class AttendanceService {
             this.isLearnerExpectedForAttendanceOnDate(
               learner,
               referentialAttendanceClosures,
+              sessionAttendanceInfoMap,
               attendanceDate,
             ) &&
             this.isAttendanceOnOrAfterStart(attendanceDate, learnerStartDate)
@@ -2368,7 +2585,11 @@ export class AttendanceService {
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
         promotionId: learner.promotionId,
-        ...(learner.refId ? { refId: learner.refId } : {}),
+        ...(learner.sessionId
+          ? { sessionId: learner.sessionId }
+          : learner.refId
+            ? { refId: learner.refId }
+            : {}),
         status: {
           in: ["ACTIVE", "REPLACEMENT"],
         },
