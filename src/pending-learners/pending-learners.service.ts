@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PendingStatus, UserRole } from '@prisma/client';
+import { PendingStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePendingLearnerDto } from './dto/create-pending-learner.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -59,7 +59,7 @@ export class PendingLearnersService {
   private toPublicSubmissionResponse() {
     return {
       success: true,
-      message: 'Votre inscription sera verifiee par l administration avant activation.',
+      message: 'Inscription réussie. Vos identifiants ont été envoyés par email.',
     };
   }
 
@@ -117,17 +117,6 @@ export class PendingLearnersService {
 
     this.validatePhotoFile(photoFile);
 
-    const existingPending = await this.prisma.pendingLearner.findFirst({
-      where: {
-        OR: [{ email: dto.email }, { phone: dto.phone }],
-        status: PendingStatus.PENDING,
-      },
-    });
-
-    if (existingPending) {
-      throw new ConflictException('Cet apprenant a deja une demande en attente');
-    }
-
     const existingLearner = await this.prisma.learner.findFirst({
       where: {
         OR: [{ user: { email: dto.email } }, { phone: dto.phone }],
@@ -145,18 +134,7 @@ export class PendingLearnersService {
       }),
       this.prisma.referential.findUnique({
         where: { id: dto.refId },
-        select: {
-          id: true,
-          name: true,
-          numberOfSessions: true,
-          sessions: {
-            select: {
-              id: true,
-              name: true,
-              capacity: true,
-            },
-          },
-        },
+        select: { id: true, name: true },
       }),
     ]);
 
@@ -168,85 +146,30 @@ export class PendingLearnersService {
       throw new NotFoundException('Referentiel introuvable');
     }
 
-    if (referential.numberOfSessions > 1) {
-      if (!dto.sessionId?.trim()) {
-        throw new BadRequestException(
-          'Ce référentiel a plusieurs sessions. Veuillez sélectionner une session.',
-        );
-      }
-
-      const session = referential.sessions.find((item) => item.id === dto.sessionId);
-
-      if (!session) {
-        throw new BadRequestException('Session invalide pour ce référentiel');
-      }
-
-      const sessionLearnerCount = await this.prisma.learner.count({
-        where: { sessionId: dto.sessionId },
-      });
-
-      if (sessionLearnerCount >= session.capacity) {
-        throw new BadRequestException(
-          `La session ${session.name} a atteint sa capacité maximale`,
-        );
-      }
-    } else if (dto.sessionId) {
-      throw new BadRequestException(
-        'Un sessionId ne doit pas être fourni pour un référentiel à session unique',
-      );
-    }
-
-    let photoUrl: string | undefined;
-    if (photoFile) {
-      const uploadResult = await this.cloudinaryService.uploadFile(photoFile, 'pending-learners');
-      photoUrl = uploadResult.url;
-    }
-
-    const pendingLearner = await this.prisma.pendingLearner.create({
-      data: {
+    const learner = await this.learnersService.create(
+      {
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
         email: dto.email.trim().toLowerCase(),
         phone: dto.phone.trim(),
         address: dto.address.trim(),
         gender: dto.gender,
-        birthDate: new Date(dto.birthDate),
+        birthDate: dto.birthDate,
         birthPlace: dto.birthPlace.trim(),
         promotionId: dto.promotionId,
         refId: dto.refId,
-        sessionId: dto.sessionId ?? null,
-        photoUrl,
-        tutorData: tutor,
+        sessionId: dto.sessionId ?? undefined,
+        tutor,
       },
-      include: {
-        promotion: { select: { id: true, name: true } },
-        referential: { select: { id: true, name: true } },
-      },
-    });
-
-    const admins = await this.prisma.user.findMany({
-      where: { role: UserRole.ADMIN },
-      select: { email: true },
-    });
-
-    await Promise.allSettled(
-      admins
-        .map((admin) => admin.email)
-        .filter(Boolean)
-        .map((adminEmail) =>
-          this.emailService.sendPendingLearnerNotification(adminEmail, {
-            firstName: pendingLearner.firstName,
-            lastName: pendingLearner.lastName,
-            email: pendingLearner.email,
-            phone: pendingLearner.phone,
-            promotionName: pendingLearner.promotion.name,
-            referentialName: pendingLearner.referential.name,
-            pendingLearnerId: pendingLearner.id,
-          }),
-        ),
+      photoFile,
     );
 
-    return this.toPublicSubmissionResponse();
+    this.logger.log(`Public learner registration completed: ${learner.id}`);
+
+    return {
+      ...this.toPublicSubmissionResponse(),
+      learnerId: learner.id,
+    };
   }
 
   async getPendingLearners(status?: PendingStatus) {
