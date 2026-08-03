@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Referential } from '@prisma/client';
 import { CreateReferentialDto } from './dto/create-referential.dto';
@@ -7,6 +7,8 @@ import { ReferentialStats, SessionStats } from './interfaces/referential-stats.i
 
 @Injectable()
 export class ReferentialsService {
+  private readonly logger = new Logger(ReferentialsService.name);
+
   constructor(private prisma: PrismaService) {}
 
   private async getAttendanceClosedAtMap(ids: string[]) {
@@ -14,11 +16,89 @@ export class ReferentialsService {
       return new Map<string, Date | null>();
     }
 
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; attendanceClosedAt: Date | null }>>(
-      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(ids)})`
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ id: string; attendanceClosedAt: Date | null }>>(
+        Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(ids)})`
+      );
+
+      return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de lire attendanceClosedAt sur Referential, fallback à null: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      return new Map(ids.map((id) => [id, null]));
+    }
+  }
+
+  private async getSessionAttendanceClosedAtMap(sessionIds: string[]) {
+    if (!sessionIds.length) {
+      return new Map<string, Date | null>();
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ id: string; attendanceClosedAt: Date | null }>>(
+        Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Session" WHERE id IN (${Prisma.join(sessionIds)})`
+      );
+
+      return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de lire attendanceClosedAt sur Session, fallback à null: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      return new Map(sessionIds.map((id) => [id, null]));
+    }
+  }
+
+  private async findOneFallback(id: string) {
+    const referential = await this.prisma.referential.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        photoUrl: true,
+        capacity: true,
+        createdAt: true,
+        updatedAt: true,
+        numberOfSessions: true,
+        sessionLength: true,
+        learners: true,
+        coaches: true,
+        modules: true,
+        sessions: {
+          select: {
+            id: true,
+            name: true,
+            startDate: true,
+            endDate: true,
+            referentialId: true,
+            capacity: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!referential) {
+      throw new NotFoundException('Référentiel non trouvé');
+    }
+
+    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+    const sessionAttendanceClosedAtMap = await this.getSessionAttendanceClosedAtMap(
+      referential.sessions?.map((session) => session.id) ?? [],
     );
 
-    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+    return {
+      ...referential,
+      attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+      sessions: (referential.sessions ?? []).map((session) => ({
+        ...session,
+        attendanceClosedAt: sessionAttendanceClosedAtMap.get(session.id) ?? null,
+      })),
+    } as ReferentialWithRelations;
   }
 
   async create(data: CreateReferentialDto): Promise<Referential> {
@@ -118,65 +198,117 @@ export class ReferentialsService {
    }
 
   async findOne(id: string): Promise<ReferentialWithRelations> {
-    const referential = await this.prisma.referential.findUnique({
-      where: { id },
-      include: {
-        sessions: {
-          include: {
-            learners: true,
-            modules: true,
-          }
+    try {
+      const referential = await this.prisma.referential.findUnique({
+        where: { id },
+        include: {
+          sessions: {
+            include: {
+              learners: true,
+              modules: true,
+            },
+          },
+          learners: true,
+          coaches: true,
+          modules: true,
         },
-        learners: true,
-        coaches: true,
-        modules: true,
-      },
-    });
+      });
 
-    if (!referential) {
-      throw new NotFoundException('Référentiel non trouvé');
+      if (!referential) {
+        throw new NotFoundException('Référentiel non trouvé');
+      }
+
+      const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+
+      return {
+        ...referential,
+        attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+      } as ReferentialWithRelations;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `findOne detailed referential fallback for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      return this.findOneFallback(id);
     }
-
-    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
-
-    return {
-      ...referential,
-      attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
-    } as ReferentialWithRelations;
   }
 
   async findOnePublic(id: string): Promise<PublicReferential> {
-    const referential = await this.prisma.referential.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        photoUrl: true,
-        capacity: true,
-        modules: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            photoUrl: true,
-            startDate: true,
-            endDate: true,
+    try {
+      const referential = await this.prisma.referential.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          photoUrl: true,
+          capacity: true,
+          modules: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              photoUrl: true,
+              startDate: true,
+              endDate: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!referential) {
-      throw new NotFoundException('Référentiel non trouvé');
+      if (!referential) {
+        throw new NotFoundException('Référentiel non trouvé');
+      }
+
+      const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+
+      return {
+        ...referential,
+        attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `findOnePublic fallback for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      const fallback = await this.prisma.referential.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          photoUrl: true,
+          capacity: true,
+          modules: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              photoUrl: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
+      });
+
+      if (!fallback) {
+        throw new NotFoundException('Référentiel non trouvé');
+      }
+
+      return {
+        ...fallback,
+        attendanceClosedAt: null,
+      };
     }
-
-    const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
-
-    return {
-      ...referential,
-      attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
-    };
   }
 
   async update(id: string, data: Prisma.ReferentialUpdateInput & { attendanceClosedAt?: Date | string | null }): Promise<Referential> {

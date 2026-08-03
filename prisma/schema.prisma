@@ -180,6 +180,7 @@ model PendingLearner {
   photoUrl     String?
   promotionId  String
   refId        String
+  sessionId    String?
   
   // Données du tuteur (stockées en JSON)
   tutorData    Json
@@ -199,6 +200,7 @@ model PendingLearner {
   // Relations
   promotion    Promotion     @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   referential  Referential   @relation(fields: [refId], references: [id], onDelete: Cascade)
+  session      Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   
   @@index([email])
   @@index([status])

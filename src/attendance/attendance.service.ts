@@ -581,13 +581,23 @@ export class AttendanceService {
       return new Map();
     }
 
-    const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; attendanceClosedAt: Date | null }>
-    >(
-      Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(referentialIds)})`,
-    );
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: string; attendanceClosedAt: Date | null }>
+      >(
+        Prisma.sql`SELECT id, "attendanceClosedAt" FROM "Referential" WHERE id IN (${Prisma.join(referentialIds)})`,
+      );
 
-    return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+      return new Map(rows.map((row) => [row.id, row.attendanceClosedAt]));
+    } catch (error) {
+      this.logger.warn(
+        `attendanceClosedAt indisponible sur Referential, fallback à null: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return new Map(referentialIds.map((id) => [id, null]));
+    }
   }
 
   private async getSessionAttendanceInfoMap(
@@ -597,27 +607,46 @@ export class AttendanceService {
       return new Map();
     }
 
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        id: string;
-        startDate: Date | null;
-        endDate: Date | null;
-        attendanceClosedAt: Date | null;
-      }>
-    >(
-      Prisma.sql`SELECT id, "startDate", "endDate", "attendanceClosedAt" FROM "Session" WHERE id IN (${Prisma.join(sessionIds)})`,
-    );
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          startDate: Date | null;
+          endDate: Date | null;
+          attendanceClosedAt: Date | null;
+        }>
+      >(
+        Prisma.sql`SELECT id, "startDate", "endDate", "attendanceClosedAt" FROM "Session" WHERE id IN (${Prisma.join(sessionIds)})`,
+      );
 
-    return new Map(
-      rows.map((row) => [
-        row.id,
-        {
-          startDate: row.startDate,
-          endDate: row.endDate,
-          attendanceClosedAt: row.attendanceClosedAt,
-        },
-      ]),
-    );
+      return new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            startDate: row.startDate,
+            endDate: row.endDate,
+            attendanceClosedAt: row.attendanceClosedAt,
+          },
+        ]),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `attendanceClosedAt indisponible sur Session, fallback à null: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return new Map(
+        sessionIds.map((id) => [
+          id,
+          {
+            startDate: null,
+            endDate: null,
+            attendanceClosedAt: null,
+          },
+        ]),
+      );
+    }
   }
 
   private getLearnerAttendanceClosureState(

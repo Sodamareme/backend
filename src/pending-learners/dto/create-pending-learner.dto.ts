@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsDateString,
+  IsOptional,
 } from 'class-validator';
 import { Gender } from '@prisma/client';
 
@@ -38,6 +39,10 @@ export class CreatePendingLearnerDto {
 
   @IsString()
   promotionId: string;
+
+  @IsString()
+  @IsOptional()
+  sessionId?: string;
 
   @IsString()
   refId: string;

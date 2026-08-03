@@ -145,7 +145,18 @@ export class PendingLearnersService {
       }),
       this.prisma.referential.findUnique({
         where: { id: dto.refId },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          numberOfSessions: true,
+          sessions: {
+            select: {
+              id: true,
+              name: true,
+              capacity: true,
+            },
+          },
+        },
       }),
     ]);
 
@@ -155,6 +166,34 @@ export class PendingLearnersService {
 
     if (!referential) {
       throw new NotFoundException('Referentiel introuvable');
+    }
+
+    if (referential.numberOfSessions > 1) {
+      if (!dto.sessionId?.trim()) {
+        throw new BadRequestException(
+          'Ce référentiel a plusieurs sessions. Veuillez sélectionner une session.',
+        );
+      }
+
+      const session = referential.sessions.find((item) => item.id === dto.sessionId);
+
+      if (!session) {
+        throw new BadRequestException('Session invalide pour ce référentiel');
+      }
+
+      const sessionLearnerCount = await this.prisma.learner.count({
+        where: { sessionId: dto.sessionId },
+      });
+
+      if (sessionLearnerCount >= session.capacity) {
+        throw new BadRequestException(
+          `La session ${session.name} a atteint sa capacité maximale`,
+        );
+      }
+    } else if (dto.sessionId) {
+      throw new BadRequestException(
+        'Un sessionId ne doit pas être fourni pour un référentiel à session unique',
+      );
     }
 
     let photoUrl: string | undefined;
@@ -175,6 +214,7 @@ export class PendingLearnersService {
         birthPlace: dto.birthPlace.trim(),
         promotionId: dto.promotionId,
         refId: dto.refId,
+        sessionId: dto.sessionId ?? null,
         photoUrl,
         tutorData: tutor,
       },
@@ -257,6 +297,7 @@ export class PendingLearnersService {
         birthPlace: pendingLearner.birthPlace,
         promotionId: pendingLearner.promotionId,
         refId: pendingLearner.refId,
+        sessionId: pendingLearner.sessionId ?? undefined,
         tutor,
       },
       undefined,
