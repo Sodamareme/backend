@@ -28,6 +28,14 @@ export class EmailService {
     });
   }
 
+  private getFromAddress(): string {
+    return this.configService.get('SMTP_FROM') || this.configService.get('SMTP_USER');
+  }
+
+  private getFromName(): string {
+    return this.configService.get('MAIL_FROM_NAME') || 'ODC Inside';
+  }
+
   /**
    * Envoyer l'email de réinitialisation de mot de passe
    */
@@ -37,8 +45,8 @@ export class EmailService {
 
     const mailOptions = {
       from: {
-        name: 'ODC Inside',
-        address: this.configService.get('SMTP_USER'),
+        name: this.getFromName(),
+        address: this.getFromAddress(),
       },
       to: email,
       subject: '🔐 Réinitialisation de votre mot de passe - ODC Inside',
@@ -191,8 +199,8 @@ ODC Inside - Orange Digital Center
   async sendPasswordResetConfirmation(email: string): Promise<void> {
     const mailOptions = {
       from: {
-        name: 'ODC Inside',
-        address: this.configService.get('SMTP_USER'),
+        name: this.getFromName(),
+        address: this.getFromAddress(),
       },
       to: email,
       subject: '✅ Votre mot de passe a été modifié - ODC Inside',
@@ -248,8 +256,8 @@ ODC Inside - Orange Digital Center
 
     const mailOptions = {
       from: {
-        name: 'ODC Inside',
-        address: this.configService.get('SMTP_USER'),
+        name: this.getFromName(),
+        address: this.getFromAddress(),
       },
       to: adminEmail,
       subject: '🔔 Nouvelle demande d\'inscription - ODC Inside',

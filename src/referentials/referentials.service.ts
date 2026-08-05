@@ -257,6 +257,16 @@ export class ReferentialsService {
               endDate: true,
             },
           },
+          sessions: {
+            select: {
+              id: true,
+              name: true,
+              referentialId: true,
+              capacity: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
         },
       });
 
@@ -265,10 +275,17 @@ export class ReferentialsService {
       }
 
       const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+      const sessionAttendanceClosedAtMap = await this.getSessionAttendanceClosedAtMap(
+        referential.sessions?.map((session) => session.id) ?? [],
+      );
 
       return {
         ...referential,
         attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+        sessions: (referential.sessions ?? []).map((session) => ({
+          ...session,
+          attendanceClosedAt: sessionAttendanceClosedAtMap.get(session.id) ?? null,
+        })),
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -297,6 +314,16 @@ export class ReferentialsService {
               endDate: true,
             },
           },
+          sessions: {
+            select: {
+              id: true,
+              name: true,
+              referentialId: true,
+              capacity: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
         },
       });
 
@@ -304,9 +331,18 @@ export class ReferentialsService {
         throw new NotFoundException('Référentiel non trouvé');
       }
 
+      const attendanceClosedAtMap = await this.getAttendanceClosedAtMap([id]);
+      const sessionAttendanceClosedAtMap = await this.getSessionAttendanceClosedAtMap(
+        fallback.sessions?.map((session) => session.id) ?? [],
+      );
+
       return {
         ...fallback,
-        attendanceClosedAt: null,
+        attendanceClosedAt: attendanceClosedAtMap.get(id) ?? null,
+        sessions: (fallback.sessions ?? []).map((session) => ({
+          ...session,
+          attendanceClosedAt: sessionAttendanceClosedAtMap.get(session.id) ?? null,
+        })),
       };
     }
   }

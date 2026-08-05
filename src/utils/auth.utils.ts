@@ -27,8 +27,14 @@ export class AuthUtils {
   }
 
   static async sendPasswordEmail(email: string, password: string, role: string): Promise<void> {
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+    const fromName = process.env.MAIL_FROM_NAME || 'ODC Inside';
+
     const mailOptions = {
-      from: process.env.SMTP_USER,
+      from: {
+        name: fromName,
+        address: fromAddress,
+      },
       to: email,
       subject: 'Vos identifiants de connexion - ODC Inside',
       html: `

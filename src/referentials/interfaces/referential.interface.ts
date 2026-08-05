@@ -16,6 +16,12 @@ export interface PublicReferentialModule {
   endDate: Date;
 }
 
+export interface PublicReferentialSession {
+  id: string;
+  name: string;
+  attendanceClosedAt: Date | null;
+}
+
 export interface PublicReferential {
   id: string;
   name: string;
@@ -24,4 +30,5 @@ export interface PublicReferential {
   capacity: number;
   attendanceClosedAt: Date | null;
   modules: PublicReferentialModule[];
+  sessions: PublicReferentialSession[];
 }

@@ -364,11 +364,11 @@ export class LearnersService {
 
           // 10. Email (sans bloquer si erreur)
           try {
-            await AuthUtils.sendPasswordEmail(
-              createLearnerDto.email,
-              password,
-              'Apprenant',
-            );
+            await this.emailService.sendLearnerApprovalEmail(createLearnerDto.email, password, {
+              firstName: createLearnerDto.firstName,
+              lastName: createLearnerDto.lastName,
+              matricule: learner.matricule,
+            });
             this.logger.debug('Learner onboarding email sent');
           } catch (emailError) {
             this.logger.error('Échec envoi email:', emailError.message);
@@ -750,7 +750,11 @@ export class LearnersService {
         });
 
         try {
-          await AuthUtils.sendPasswordEmail(learnerData.email, password, 'Apprenant');
+          await this.emailService.sendLearnerApprovalEmail(learnerData.email, password, {
+            firstName: learnerData.firstName,
+            lastName: learnerData.lastName,
+            matricule: learner.matricule,
+          });
         } catch (emailError) {
           this.logger.error('Échec envoi email:', emailError);
         }

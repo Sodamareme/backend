@@ -220,7 +220,7 @@ export class PendingLearnersService {
         birthPlace: pendingLearner.birthPlace,
         promotionId: pendingLearner.promotionId,
         refId: pendingLearner.refId,
-        sessionId: pendingLearner.sessionId ?? undefined,
+        sessionId: (pendingLearner as { sessionId?: string | null }).sessionId ?? undefined,
         tutor,
       },
       undefined,
