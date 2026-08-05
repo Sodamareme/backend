@@ -765,6 +765,57 @@ export class LearnersService {
     );
   }
 
+  async resendCredentialsByEmail(email: string): Promise<{ success: true; message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: {
+        learner: {
+          select: {
+            firstName: true,
+            lastName: true,
+            matricule: true,
+          },
+        },
+      },
+    });
+
+    if (!user || user.role !== 'APPRENANT' || !user.learner) {
+      throw new NotFoundException(`Aucun apprenant trouvé avec l'email ${normalizedEmail}`);
+    }
+
+    const password = AuthUtils.generatePassword();
+    const hashedPassword = await AuthUtils.hashPassword(password);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        updatedAt: new Date(),
+      },
+    });
+
+    let emailSent = true;
+    try {
+      await this.emailService.sendLearnerApprovalEmail(normalizedEmail, password, {
+        firstName: user.learner.firstName,
+        lastName: user.learner.lastName,
+        matricule: user.learner.matricule,
+      });
+    } catch (error) {
+      this.logger.error(`Échec du renvoi des identifiants à ${normalizedEmail}:`, error);
+      emailSent = false;
+    }
+
+    return {
+      success: true,
+      message: emailSent
+        ? `Les identifiants ont été renvoyés à ${normalizedEmail}`
+        : `Le mot de passe a été réinitialisé pour ${normalizedEmail}, mais l'email n'a pas pu être envoyé`,
+    };
+  }
+
   private async validateLearnerData(
     learner: BulkCreateLearnerDto,
     lineNumber: number,

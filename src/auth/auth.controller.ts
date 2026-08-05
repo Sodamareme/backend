@@ -1,4 +1,14 @@
-import { Controller, Post, UseGuards, Body, Put, Req, Logger, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseGuards,
+  Body,
+  Put,
+  Req,
+  Logger,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
@@ -52,15 +62,29 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const clientIp = this.getClientIp(req);
-    this.authRateLimitService.consume(`login:${clientIp}`, {
-      limit: 5,
-      windowMs: 10 * 60 * 1000,
-      message:
-        'Trop de tentatives de connexion. Veuillez reessayer dans quelques minutes.',
-    });
-    const result = await this.authService.login(loginDto);
-    setAuthCookie(res, result.access_token, req);
-    return result;
+    const normalizedEmail = loginDto.email.trim().toLowerCase();
+    const rateLimitKey = `login:${clientIp}:${normalizedEmail}`;
+
+    try {
+      const result = await this.authService.login({
+        ...loginDto,
+        email: normalizedEmail,
+      });
+      this.authRateLimitService.reset(rateLimitKey);
+      setAuthCookie(res, result.access_token, req);
+      return result;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        this.authRateLimitService.consume(rateLimitKey, {
+          limit: 5,
+          windowMs: 10 * 60 * 1000,
+          message:
+            'Trop de tentatives de connexion. Veuillez reessayer dans quelques minutes.',
+        });
+      }
+
+      throw error;
+    }
   }
 
   @Put('change-password')

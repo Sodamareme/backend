@@ -458,193 +458,40 @@ ODC Inside - Orange Digital Center
       matricule: string;
     }
   ): Promise<void> {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://gestionecoleodc.com';
-    const loginLink = `${frontendUrl}/login`;
-
     const mailOptions = {
       from: {
-        name: 'ODC Inside',
-        address: this.configService.get('SMTP_USER'),
+        name: this.getFromName(),
+        address: this.getFromAddress(),
       },
       to: email,
-      subject: '🎉 Inscription validée - Bienvenue à ODC Inside',
+      subject: 'Vos identifiants de connexion - ODC Inside',
       html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              line-height: 1.6;
-              color: #333;
-              max-width: 600px;
-              margin: 0 auto;
-              background-color: #f4f4f4;
-            }
-            .container {
-              background-color: #ffffff;
-              margin: 20px;
-              padding: 40px;
-              border-radius: 10px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .header {
-              text-align: center;
-              padding-bottom: 20px;
-              border-bottom: 3px solid #10b981;
-            }
-            .logo {
-              max-width: 150px;
-              margin-bottom: 20px;
-            }
-            .success-icon {
-              font-size: 64px;
-              margin: 20px 0;
-            }
-            h1 {
-              color: #10b981;
-              font-size: 28px;
-              margin: 10px 0;
-            }
-            .content {
-              padding: 30px 0;
-            }
-            .credentials-box {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              border-radius: 12px;
-              padding: 25px;
-              margin: 25px 0;
-              color: white;
-            }
-            .credential-item {
-              background-color: rgba(255, 255, 255, 0.2);
-              border-radius: 8px;
-              padding: 15px;
-              margin: 10px 0;
-            }
-            .credential-label {
-              font-size: 12px;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              opacity: 0.9;
-              margin-bottom: 5px;
-            }
-            .credential-value {
-              font-size: 18px;
-              font-weight: bold;
-              font-family: 'Courier New', monospace;
-            }
-            .button {
-              display: inline-block;
-              padding: 15px 40px;
-              background: linear-gradient(to right, #10b981, #059669);
-              color: #ffffff !important;
-              text-decoration: none;
-              border-radius: 8px;
-              font-weight: bold;
-              margin: 20px 0;
-              text-align: center;
-            }
-            .button:hover {
-              background: linear-gradient(to right, #059669, #047857);
-            }
-            .warning {
-              background-color: #fef3c7;
-              border-left: 4px solid #f59e0b;
-              padding: 15px;
-              margin: 20px 0;
-              border-radius: 4px;
-            }
-            .footer {
-              text-align: center;
-              padding-top: 20px;
-              border-top: 1px solid #e5e7eb;
-              color: #6b7280;
-              font-size: 14px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <img src="https://res.cloudinary.com/drxouwbms/image/upload/v1743507686/image_27_qtiin4.png" alt="ODC Inside" class="logo">
-              <div class="success-icon">🎉</div>
-              <h1>Inscription validée !</h1>
-            </div>
-            
-            <div class="content">
-              <p>Bonjour <strong>${learnerData.firstName} ${learnerData.lastName}</strong>,</p>
-              
-              <p>Félicitations ! Votre demande d'inscription à <strong>ODC Inside</strong> a été validée par notre équipe administrative.</p>
-              
-              <p>Vous pouvez dès maintenant accéder à votre espace personnel avec vos identifiants ci-dessous :</p>
-              
-              <div class="credentials-box">
-                <h3 style="margin-top: 0; text-align: center;">🔐 Vos identifiants de connexion</h3>
-                
-                <div class="credential-item">
-                  <div class="credential-label">Matricule</div>
-                  <div class="credential-value">${learnerData.matricule}</div>
-                </div>
-                
-                <div class="credential-item">
-                  <div class="credential-label">Email</div>
-                  <div class="credential-value">${email}</div>
-                </div>
-                
-                <div class="credential-item">
-                  <div class="credential-label">Mot de passe</div>
-                  <div class="credential-value">${password}</div>
-                </div>
-              </div>
-              
-              <div class="warning">
-                <strong>⚠️ Important :</strong> Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe lors de votre première connexion.
-              </div>
-              
-              <div style="text-align: center;">
-                <a href="${loginLink}" class="button">Se connecter maintenant</a>
-              </div>
-              
-              <p style="margin-top: 30px;">Si vous rencontrez des difficultés pour vous connecter, n'hésitez pas à contacter notre support technique.</p>
-              
-              <p><strong>Bienvenue dans la communauté ODC Inside ! 🚀</strong></p>
-            </div>
-            
-            <div class="footer">
-              <p>Cet email a été envoyé par <strong>ODC Inside</strong></p>
-              <p>© ${new Date().getFullYear()} Sonatel - Orange Digital Center. Tous droits réservés.</p>
-              <p style="font-size: 12px; color: #9ca3af;">
-                Ceci est un email automatique, merci de ne pas y répondre.
-              </p>
-            </div>
-          </div>
-        </body>
-        </html>
+        <p>Bonjour ${learnerData.firstName} ${learnerData.lastName},</p>
+
+        <p>Votre inscription à ODC Inside a été validée.</p>
+
+        <p><strong>Vos identifiants de connexion</strong></p>
+        <p>Matricule : ${learnerData.matricule}</p>
+        <p>Email : ${email}</p>
+        <p>Mot de passe : ${password}</p>
+
+        <p>Veuillez vous connecter depuis l'application avec ces identifiants et changer votre mot de passe après la première connexion.</p>
+
+        <p>Si vous avez un souci, contactez l'équipe technique.</p>
       `,
       text: `
-Inscription validée - Bienvenue à ODC Inside
-
 Bonjour ${learnerData.firstName} ${learnerData.lastName},
 
-Félicitations ! Votre inscription a été validée.
+Votre inscription à ODC Inside a été validée.
 
 Vos identifiants de connexion:
 - Matricule: ${learnerData.matricule}
 - Email: ${email}
 - Mot de passe: ${password}
 
-⚠️ Changez votre mot de passe lors de votre première connexion.
+Veuillez vous connecter depuis l'application avec ces identifiants et changer votre mot de passe après la première connexion.
 
-Connectez-vous ici: ${loginLink}
-
-Bienvenue dans la communauté ODC Inside !
-
----
-ODC Inside - Orange Digital Center
-© ${new Date().getFullYear()} Sonatel. Tous droits réservés.
+En cas de souci, contactez l'équipe technique.
       `,
     };
 

@@ -34,6 +34,10 @@ export class AuthRateLimitService {
     this.cleanup(now);
   }
 
+  reset(key: string) {
+    this.attempts.delete(key);
+  }
+
   private cleanup(now: number) {
     if (this.attempts.size < 500) {
       return;

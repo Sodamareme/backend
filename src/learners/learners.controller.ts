@@ -198,6 +198,17 @@ export class LearnersController {
     return this.learnersService.bulkCreateLearners(bulkCreateDto.learners);
   }
 
+  @Post('resend-credentials')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Renvoyer les identifiants de connexion à un apprenant existant' })
+  async resendCredentials(@Body('email') email: string) {
+    if (!email?.trim()) {
+      throw new BadRequestException('L email est requis');
+    }
+
+    return this.learnersService.resendCredentialsByEmail(email);
+  }
+
   @Post('replace')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
