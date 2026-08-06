@@ -1070,6 +1070,7 @@ export class LearnersService {
           id: true,
           firstName: true,
           lastName: true,
+          photoUrl: true,
           matricule: true,
           phone: true,
           status: true,
