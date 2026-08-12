@@ -2078,13 +2078,31 @@ export class AttendanceService {
           ...(referentialId ? { refId: referentialId } : {}),
         },
       },
-      include: {
+      select: {
+        id: true,
+        date: true,
+        scanTime: true,
+        isPresent: true,
+        isLate: true,
+        status: true,
+        justification: true,
+        documentUrl: true,
+        justificationComment: true,
         learner: {
           select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            matricule: true,
+            photoUrl: true,
+            address: true,
             promotionId: true,
-          },
-          include: {
-            referential: true,
+            referential: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
