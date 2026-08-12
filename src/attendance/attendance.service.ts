@@ -375,6 +375,7 @@ export class AttendanceService {
         ? this.getLearnerAnalyticsStartDate(
             learnerData,
             replacementStartDates.get(record.learnerId) ?? null,
+            sessionAttendanceInfoMap,
           )
         : null;
 
@@ -426,6 +427,7 @@ export class AttendanceService {
       const learnerStartDate = this.getLearnerAnalyticsStartDate(
         learner,
         replacementStartDates.get(learner.id) ?? null,
+        sessionAttendanceInfoMap,
       );
 
       if (!learnerStartDate) {
@@ -560,11 +562,21 @@ export class AttendanceService {
     learner: {
       createdAt?: Date | null;
       status: LearnerStatus;
+      sessionId?: string | null;
     },
     replacementStartDate?: Date | null,
+    sessionAttendanceInfoMap?: Map<string, AttendanceSessionInfo>,
   ): Date | null {
     if (learner.status === LearnerStatus.REPLACEMENT) {
       return replacementStartDate ?? null;
+    }
+
+    const sessionInfo = learner.sessionId
+      ? sessionAttendanceInfoMap?.get(learner.sessionId)
+      : null;
+
+    if (sessionInfo?.startDate) {
+      return this.normalizeAttendanceBoundary(sessionInfo.startDate);
     }
 
     if (!learner.createdAt) {
@@ -2411,6 +2423,7 @@ export class AttendanceService {
           this.getLearnerAnalyticsStartDate(
             learner,
             replacementStartDates.get(learner.id) ?? null,
+            sessionAttendanceInfoMap,
           ),
         );
       });
