@@ -122,10 +122,10 @@ export class AttendanceService {
   >(rows: T[]): T[] {
     return [...rows].sort(
       (a, b) =>
-        b.attendanceRate - a.attendanceRate ||
-        b.presentCount - a.presentCount ||
+        a.absenceCount - b.absenceCount ||
         a.lateCount - b.lateCount ||
-        a.absenceCount - b.absenceCount,
+        b.presentCount - a.presentCount ||
+        b.attendanceRate - a.attendanceRate,
     );
   }
 
