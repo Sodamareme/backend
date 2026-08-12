@@ -75,7 +75,8 @@ export class EmailService {
         address: this.getFromAddress(),
       },
       to: email,
-      subject: '🔐 Réinitialisation de votre mot de passe - ODC Inside',
+      subject: 'Réinitialisation de votre mot de passe - ODC Inside',
+      replyTo: this.getFromAddress(),
       html: `
         <!DOCTYPE html>
         <html>
@@ -84,41 +85,34 @@ export class EmailService {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
             body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              line-height: 1.6;
-              color: #333;
+              font-family: Arial, sans-serif;
+              line-height: 1.5;
+              color: #1f2937;
               max-width: 600px;
               margin: 0 auto;
-              background-color: #f4f4f4;
+              background-color: #ffffff;
             }
             .container {
-              background-color: #ffffff;
-              margin: 20px;
-              padding: 40px;
+              margin: 0 auto;
+              padding: 24px;
               border-radius: 10px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             }
             .header {
               text-align: center;
-              padding-bottom: 20px;
-              border-bottom: 3px solid #f97316;
-            }
-            .logo {
-              max-width: 150px;
-              margin-bottom: 20px;
+              margin-bottom: 24px;
             }
             h1 {
-              color: #1f2937;
-              font-size: 24px;
-              margin: 0;
+              color: #111827;
+              font-size: 22px;
+              margin: 0 0 8px 0;
             }
             .content {
-              padding: 30px 0;
+              color: #374151;
             }
             .button {
               display: inline-block;
-              padding: 15px 40px;
-              background: linear-gradient(to right, #f97316, #dc2626);
+              padding: 14px 28px;
+              background: #f16e00;
               color: #ffffff !important;
               text-decoration: none;
               border-radius: 8px;
@@ -127,24 +121,24 @@ export class EmailService {
               text-align: center;
             }
             .button:hover {
-              background: linear-gradient(to right, #ea580c, #b91c1c);
+              background: #d95f00;
             }
             .warning {
-              background-color: #fef3c7;
-              border-left: 4px solid #f59e0b;
-              padding: 15px;
+              background-color: #fff7ed;
+              border-left: 4px solid #f16e00;
+              padding: 14px 16px;
               margin: 20px 0;
               border-radius: 4px;
             }
             .footer {
               text-align: center;
-              padding-top: 20px;
+              padding-top: 16px;
               border-top: 1px solid #e5e7eb;
               color: #6b7280;
               font-size: 14px;
             }
             .link {
-              color: #f97316;
+              color: #f16e00;
               word-break: break-all;
               font-size: 12px;
             }
@@ -153,8 +147,7 @@ export class EmailService {
         <body>
           <div class="container">
             <div class="header">
-              <img src="https://res.cloudinary.com/drxouwbms/image/upload/v1743507686/image_27_qtiin4.png" alt="ODC Inside" class="logo">
-              <h1>🔐 Réinitialisation de mot de passe</h1>
+              <h1>Réinitialisation de mot de passe</h1>
             </div>
             
             <div class="content">
@@ -169,7 +162,7 @@ export class EmailService {
               </div>
               
               <div class="warning">
-                <strong>⏰ Important :</strong> Ce lien est valide pendant <strong>1 heure</strong> uniquement.
+                <strong>Important :</strong> Ce lien est valide pendant <strong>1 heure</strong> uniquement.
               </div>
               
               <p>Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :</p>
@@ -180,11 +173,7 @@ export class EmailService {
             </div>
             
             <div class="footer">
-              <p>Cet email a été envoyé par <strong>ODC Inside</strong></p>
               <p>© ${new Date().getFullYear()} Sonatel - Orange Digital Center. Tous droits réservés.</p>
-              <p style="font-size: 12px; color: #9ca3af;">
-                Ceci est un email automatique, merci de ne pas y répondre.
-              </p>
             </div>
           </div>
         </body>
