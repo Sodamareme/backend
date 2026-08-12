@@ -2080,6 +2080,7 @@ export class AttendanceService {
       },
       select: {
         id: true,
+        learnerId: true,
         date: true,
         scanTime: true,
         isPresent: true,
