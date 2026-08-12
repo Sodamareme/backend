@@ -2,13 +2,27 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { normalizeEmail } from '../utils/email.utils';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    return this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
   }
 
   async findById(id: string): Promise<User | null> {
@@ -16,7 +30,8 @@ export class UsersService {
   }
 
   async create(data: { email: string; password: string; role: UserRole }): Promise<User> {
-    const existingUser = await this.findByEmail(data.email);
+    const normalizedEmail = normalizeEmail(data.email);
+    const existingUser = await this.findByEmail(normalizedEmail);
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
@@ -25,6 +40,7 @@ export class UsersService {
     return this.prisma.user.create({
       data: {
         ...data,
+        email: normalizedEmail,
         password: hashedPassword,
       },
     });
@@ -40,6 +56,10 @@ export class UsersService {
       data.password = await bcrypt.hash(data.password, 10);
     }
 
+    if (data.email) {
+      data.email = normalizeEmail(data.email);
+    }
+
     return this.prisma.user.update({
       where: { id },
       data,
@@ -47,8 +67,15 @@ export class UsersService {
   }
 
   async getUserPhotoByEmail(email: string): Promise<{ photoUrl: string | null }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+    const normalizedEmail = normalizeEmail(email);
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
       include: {
         learner: {
           select: { photoUrl: true }
@@ -69,7 +96,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with email ${email} not found`);
+      throw new NotFoundException(`User with email ${normalizedEmail} not found`);
     }
 
     let photoUrl = null;

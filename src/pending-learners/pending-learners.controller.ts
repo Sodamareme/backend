@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { Public } from '../auth/decorators/public.decorators';
 import { validateImageUpload } from '../common/image-upload.util';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils';
 
 @Controller('pending-learners')
 export class PendingLearnersController {
@@ -48,10 +49,16 @@ export class PendingLearnersController {
           address: data?.['tutor[address]'],
         };
 
+    const normalizedTutor = {
+      ...tutor,
+      email: normalizeEmailOrUndefined(tutor.email),
+    };
+
     return this.pendingLearnersService.createPendingLearner(
       {
         ...data,
-        tutor,
+        email: normalizeEmail(data?.email),
+        tutor: normalizedTutor,
       } as CreatePendingLearnerDto,
       photoFile,
     );

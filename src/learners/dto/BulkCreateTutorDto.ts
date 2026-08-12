@@ -7,9 +7,10 @@ import {
   IsEnum,
   IsOptional,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LearnerStatus, Gender } from '@prisma/client';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../../utils/email.utils';
 
 export class BulkCreateTutorDto {
   @ApiProperty({ description: 'First name of the tutor' })
@@ -27,6 +28,7 @@ export class BulkCreateTutorDto {
   @ApiPropertyOptional({ description: 'Email address of the tutor' })
   @IsEmail()
   @IsOptional()
+  @Transform(({ value }) => normalizeEmailOrUndefined(value))
   email?: string;
 
   @ApiProperty({ description: 'Address of the tutor' })
@@ -45,6 +47,7 @@ export class BulkCreateLearnerDto {
 
   @ApiProperty({ description: 'Email address of the learner' })
   @IsEmail()
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 
   @ApiProperty({ description: 'Phone number of the learner' })
@@ -105,6 +108,7 @@ export class BulkCreateLearnerDto {
   @ApiPropertyOptional({ description: 'Tutor email' })
   @IsOptional()
   @IsEmail()
+  @Transform(({ value }) => normalizeEmailOrUndefined(value))
   tutorEmail?: string;
 }
 

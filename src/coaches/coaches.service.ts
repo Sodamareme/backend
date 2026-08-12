@@ -13,6 +13,7 @@ import { EmailService } from './email/email.service';
 import * as bcrypt from 'bcrypt';
 import * as QRCode from 'qrcode';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { normalizeEmail } from '../utils/email.utils';
 
 @Injectable()
 export class CoachesService {
@@ -90,13 +91,19 @@ export class CoachesService {
 
 async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
   this.logger.log('🔄 Creating coach:', createCoachDto);
+  const normalizedEmail = normalizeEmail(createCoachDto.email);
 
-  const existingUser = await this.prisma.user.findUnique({
-    where: { email: createCoachDto.email.toLowerCase().trim() },
+  const existingUser = await this.prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: 'insensitive',
+      },
+    },
   });
 
   if (existingUser) {
-    throw new ConflictException(`Un utilisateur avec l'email ${createCoachDto.email} existe déjà`);
+    throw new ConflictException(`Un utilisateur avec l'email ${normalizedEmail} existe déjà`);
   }
 
   if (createCoachDto.refId) {
@@ -131,7 +138,7 @@ async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
       matricule,
       firstName: createCoachDto.firstName,
       lastName: createCoachDto.lastName,
-      email: createCoachDto.email,
+      email: normalizedEmail,
       type: 'COACH',
     });
     const qrCode = await QRCode.toDataURL(qrCodeData);
@@ -140,7 +147,7 @@ async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
     const coach = await this.prisma.$transaction(async (prisma) => {
       const user = await prisma.user.create({
         data: {
-          email: createCoachDto.email.toLowerCase().trim(),
+          email: normalizedEmail,
           password: hashedPassword,
           role: 'COACH',
         },
@@ -176,7 +183,7 @@ async create(createCoachDto: CreateCoachDto, photoFile?: Express.Multer.File) {
     // ✅ Email APRÈS la transaction
     try {
       await this.emailService.sendCoachCredentials(
-        createCoachDto.email,
+        normalizedEmail,
         createCoachDto.firstName,
         createCoachDto.lastName,
         defaultPassword,

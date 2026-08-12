@@ -1,6 +1,8 @@
 import { IsString, IsEmail, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { LearnerStatus } from '@prisma/client';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../../utils/email.utils';
 
 export class CreateTutorDto {
   @ApiProperty()
@@ -18,6 +20,7 @@ export class CreateTutorDto {
   @ApiPropertyOptional()
   @IsEmail()
   @IsOptional()
+  @Transform(({ value }) => normalizeEmailOrUndefined(value))
   email?: string;
 
   @ApiPropertyOptional()
@@ -37,6 +40,7 @@ export class CreateLearnerDto {
 
   @ApiProperty()
   @IsEmail()
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 
   @ApiProperty()

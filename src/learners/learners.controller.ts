@@ -38,6 +38,7 @@ import { Public } from '../auth/decorators/public.decorators';
 import { CreateLearnerDto, CreateTutorDto } from './dto/create-learner.dto';
 import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
 import { validateFileUpload, validateImageUpload } from '../common/image-upload.util';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils';
 
 type LearnerTutorFormInput = Partial<CreateTutorDto>;
 
@@ -73,7 +74,10 @@ export class LearnersController {
   private assertAdminOrOwnLearner(req: any, learner: Learner & {
     user?: { email?: string };
   }) {
-    if (req.user.role !== UserRole.ADMIN && req.user.email !== learner.user?.email) {
+    const currentEmail = normalizeEmail(req.user.email);
+    const learnerEmail = normalizeEmail(learner.user?.email);
+
+    if (req.user.role !== UserRole.ADMIN && currentEmail !== learnerEmail) {
       throw new ForbiddenException('You can only access your own data');
     }
   }
@@ -124,14 +128,14 @@ export class LearnersController {
       firstName: tutor.firstName,
       lastName: tutor.lastName,
       phone: tutor.phone,
-      email: tutor.email || undefined,
+      email: normalizeEmailOrUndefined(tutor.email),
       address: tutor.address || undefined,
     };
 
     const cleanDto: CreateLearnerDto = {
       firstName:   data.firstName,
       lastName:    data.lastName,
-      email:       data.email,
+      email:       normalizeEmail(data.email),
       phone:       data.phone,
       address:     data.address,
       gender:      data.gender,
@@ -206,7 +210,7 @@ export class LearnersController {
       throw new BadRequestException('L email est requis');
     }
 
-    return this.learnersService.resendCredentialsByEmail(email);
+    return this.learnersService.resendCredentialsByEmail(normalizeEmail(email));
   }
 
   @Post('replace')
@@ -244,10 +248,13 @@ export class LearnersController {
   @ApiResponse({ status: 404, description: 'Learner not found' })
   @ApiResponse({ status: 403, description: 'Forbidden - Can only access own data' })
   async findByEmail(@Param('email') email: string, @Request() req): Promise<unknown> {
-    if (req.user.role !== UserRole.ADMIN && req.user.email !== email) {
+    const normalizedEmail = normalizeEmail(email);
+    const currentEmail = normalizeEmail(req.user.email);
+
+    if (req.user.role !== UserRole.ADMIN && currentEmail !== normalizedEmail) {
       throw new ForbiddenException('You can only access your own data');
     }
-    return this.learnersService.findByEmail(email);
+    return this.learnersService.findByEmail(normalizedEmail);
   }
 
   @Public()

@@ -1,6 +1,7 @@
 import { IsString, IsEmail, IsOptional, IsUUID, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { normalizeEmail } from '../../utils/email.utils';
 export class CreateCoachDto {
   @IsString()
   firstName: string;
@@ -9,6 +10,7 @@ export class CreateCoachDto {
   lastName: string;
 
   @IsEmail()
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 
   @IsString()

@@ -1,9 +1,12 @@
 import { Gender, LearnerStatus } from '@prisma/client';
+import { Transform } from 'class-transformer';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../../utils/email.utils';
 
 // DTO pour UN seul apprenant
 export class BulkCreateLearnerDto {
   firstName: string;
   lastName: string;
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
   phone: string;
   address: string;
@@ -17,6 +20,7 @@ export class BulkCreateLearnerDto {
   tutorFirstName: string;
   tutorLastName: string;
   tutorPhone: string;
+  @Transform(({ value }) => normalizeEmailOrUndefined(value))
   tutorEmail?: string;
   tutorAddress: string;
 }

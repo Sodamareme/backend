@@ -14,6 +14,7 @@ import { ValidationResponseDto } from './dto/ValidationResponseDto ';
 import { EmailService } from '../email/email.service';
 import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
 import { EventsService } from '../events/events.service';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils';
 
 @Injectable()
 export class LearnersService {
@@ -25,6 +26,25 @@ export class LearnersService {
     private emailService: EmailService,
     private eventsService: EventsService,
   ) {}
+
+  private normalizeCreateLearnerDto(dto: CreateLearnerDto): CreateLearnerDto {
+    return {
+      ...dto,
+      email: normalizeEmail(dto.email),
+      tutor: {
+        ...dto.tutor,
+        email: normalizeEmailOrUndefined(dto.tutor?.email),
+      },
+    };
+  }
+
+  private normalizeBulkLearnerDto(dto: BulkCreateLearnerDto): BulkCreateLearnerDto {
+    return {
+      ...dto,
+      email: normalizeEmail(dto.email),
+      tutorEmail: normalizeEmailOrUndefined(dto.tutorEmail),
+    };
+  }
 
   private getAttendanceDayKey(date: Date): string {
     return date.toISOString().split('T')[0];
@@ -137,16 +157,17 @@ export class LearnersService {
     existingPhotoUrl?: string,
   ): Promise<Learner> {
     this.logger.debug('Creating learner');
+    const normalizedCreateLearnerDto = this.normalizeCreateLearnerDto(createLearnerDto);
 
     // ✅ Validation préalable AVANT la transaction pour avoir de vrais messages d'erreur
-    await this.validateBeforeCreate(createLearnerDto);
+    await this.validateBeforeCreate(normalizedCreateLearnerDto);
 
     try {
       return await this.prisma.$transaction(
         async (prisma) => {
           // 1. Vérifier la promotion
           const promotion = await prisma.promotion.findUnique({
-            where: { id: createLearnerDto.promotionId },
+            where: { id: normalizedCreateLearnerDto.promotionId },
             include: { referentials: true },
           });
 
@@ -155,19 +176,19 @@ export class LearnersService {
           }
 
           // 2. Vérifier le référentiel si fourni
-          if (createLearnerDto.refId) {
+          if (normalizedCreateLearnerDto.refId) {
             const referentialExists = promotion.referentials.some(
-              (ref) => ref.id === createLearnerDto.refId,
+              (ref) => ref.id === normalizedCreateLearnerDto.refId,
             );
 
             if (!referentialExists) {
               throw new BadRequestException(
-                `Le référentiel ${createLearnerDto.refId} n'est pas associé à la promotion ${promotion.name}`,
+                `Le référentiel ${normalizedCreateLearnerDto.refId} n'est pas associé à la promotion ${promotion.name}`,
               );
             }
 
             const referential = await prisma.referential.findUnique({
-              where: { id: createLearnerDto.refId },
+              where: { id: normalizedCreateLearnerDto.refId },
               include: {
                 sessions: { select: { id: true, name: true, capacity: true } },
               },
@@ -179,14 +200,14 @@ export class LearnersService {
 
             // ✅ Vérification sessions
             if (referential.numberOfSessions > 1) {
-              if (!createLearnerDto.sessionId) {
+              if (!normalizedCreateLearnerDto.sessionId) {
                 throw new BadRequestException(
                   `Ce référentiel a plusieurs sessions. Veuillez spécifier un sessionId. Sessions disponibles: ${referential.sessions.map((s) => `${s.name} (${s.id})`).join(', ')}`,
                 );
               }
 
               const session = referential.sessions.find(
-                (s) => s.id === createLearnerDto.sessionId,
+                (s) => s.id === normalizedCreateLearnerDto.sessionId,
               );
 
               if (!session) {
@@ -196,7 +217,7 @@ export class LearnersService {
               }
 
               const sessionLearnerCount = await prisma.learner.count({
-                where: { sessionId: createLearnerDto.sessionId },
+                where: { sessionId: normalizedCreateLearnerDto.sessionId },
               });
 
               if (sessionLearnerCount >= session.capacity) {
@@ -204,7 +225,7 @@ export class LearnersService {
                   `La session ${session.name} a atteint sa capacité maximale de ${session.capacity} apprenants`,
                 );
               }
-            } else if (createLearnerDto.sessionId) {
+            } else if (normalizedCreateLearnerDto.sessionId) {
               throw new BadRequestException(
                 'Un sessionId ne doit pas être fourni pour un référentiel à session unique',
               );
@@ -212,16 +233,16 @@ export class LearnersService {
           }
 
           // 3. Générer le matricule
-          const referential = createLearnerDto.refId
+          const referential = normalizedCreateLearnerDto.refId
             ? await prisma.referential.findUnique({
-                where: { id: createLearnerDto.refId },
+                where: { id: normalizedCreateLearnerDto.refId },
               })
             : null;
 
           const matricule = await MatriculeUtils.generateLearnerMatricule(
             prisma as PrismaClient,
-            createLearnerDto.firstName,
-            createLearnerDto.lastName,
+            normalizedCreateLearnerDto.firstName,
+            normalizedCreateLearnerDto.lastName,
             referential?.name,
           );
 
@@ -277,8 +298,8 @@ export class LearnersService {
           const existingLearner = await prisma.learner.findFirst({
             where: {
               OR: [
-                { phone: createLearnerDto.phone },
-                { user: { email: createLearnerDto.email } },
+                { phone: normalizedCreateLearnerDto.phone },
+                { user: { email: { equals: normalizedCreateLearnerDto.email, mode: 'insensitive' } } },
               ],
             },
           });
@@ -297,35 +318,35 @@ export class LearnersService {
           const learner = await prisma.learner.create({
             data: {
               matricule,
-              firstName: createLearnerDto.firstName,
-              lastName: createLearnerDto.lastName,
-              address: createLearnerDto.address,
-              gender: createLearnerDto.gender as Gender,
-              birthDate: new Date(createLearnerDto.birthDate),
-              birthPlace: createLearnerDto.birthPlace,
-              phone: createLearnerDto.phone,
+              firstName: normalizedCreateLearnerDto.firstName,
+              lastName: normalizedCreateLearnerDto.lastName,
+              address: normalizedCreateLearnerDto.address,
+              gender: normalizedCreateLearnerDto.gender as Gender,
+              birthDate: new Date(normalizedCreateLearnerDto.birthDate),
+              birthPlace: normalizedCreateLearnerDto.birthPlace,
+              phone: normalizedCreateLearnerDto.phone,
               photoUrl,
               qrCode: qrCodeUrl,
-              status: createLearnerDto.status || LearnerStatus.ACTIVE,
+              status: normalizedCreateLearnerDto.status || LearnerStatus.ACTIVE,
               user: {
                 create: {
-                  email: createLearnerDto.email,
+                  email: normalizedCreateLearnerDto.email,
                   password: hashedPassword,
                   role: 'APPRENANT',
                 },
               },
               tutor: {
                 create: {
-                  firstName: createLearnerDto.tutor.firstName,
-                  lastName: createLearnerDto.tutor.lastName,
-                  phone: createLearnerDto.tutor.phone,
-                  email: createLearnerDto.tutor.email || '',
-                  address: createLearnerDto.tutor.address || '',
+                  firstName: normalizedCreateLearnerDto.tutor.firstName,
+                  lastName: normalizedCreateLearnerDto.tutor.lastName,
+                  phone: normalizedCreateLearnerDto.tutor.phone,
+                  email: normalizedCreateLearnerDto.tutor.email || '',
+                  address: normalizedCreateLearnerDto.tutor.address || '',
                 },
               },
-              promotion: { connect: { id: createLearnerDto.promotionId } },
-              referential: createLearnerDto.refId
-                ? { connect: { id: createLearnerDto.refId } }
+              promotion: { connect: { id: normalizedCreateLearnerDto.promotionId } },
+              referential: normalizedCreateLearnerDto.refId
+                ? { connect: { id: normalizedCreateLearnerDto.refId } }
                 : undefined,
               kit: {
                 create: {
@@ -335,8 +356,8 @@ export class LearnersService {
                   polo: false,
                 },
               },
-              session: createLearnerDto.sessionId
-                ? { connect: { id: createLearnerDto.sessionId } }
+              session: normalizedCreateLearnerDto.sessionId
+                ? { connect: { id: normalizedCreateLearnerDto.sessionId } }
                 : undefined,
             },
             include: {
@@ -364,9 +385,9 @@ export class LearnersService {
 
           // 10. Email (sans bloquer si erreur)
           try {
-            await this.emailService.sendLearnerApprovalEmail(createLearnerDto.email, password, {
-              firstName: createLearnerDto.firstName,
-              lastName: createLearnerDto.lastName,
+            await this.emailService.sendLearnerApprovalEmail(normalizedCreateLearnerDto.email, password, {
+              firstName: normalizedCreateLearnerDto.firstName,
+              lastName: normalizedCreateLearnerDto.lastName,
               matricule: learner.matricule,
             });
             this.logger.debug('Learner onboarding email sent');
@@ -543,7 +564,7 @@ export class LearnersService {
     const phonesInBatch = new Set<string>();
 
     for (let i = 0; i < learners.length; i++) {
-      const learner = learners[i];
+      const learner = this.normalizeBulkLearnerDto(learners[i]);
       this.logger.log(`Processing learner ${i + 1}/${learners.length}: ${learner.firstName} ${learner.lastName}`);
 
       try {
@@ -569,14 +590,14 @@ export class LearnersService {
           where: {
             OR: [
               { phone: learner.phone },
-              { user: { email: learner.email } },
+              { user: { email: { equals: learner.email, mode: 'insensitive' } } },
             ],
           },
           include: { user: { select: { email: true } } },
         });
 
         if (existingLearner) {
-          if (existingLearner.user?.email === learner.email) {
+          if (normalizeEmail(existingLearner.user?.email) === learner.email) {
             duplicateEmails.add(learner.email);
           }
           if (existingLearner.phone === learner.phone) {
@@ -639,16 +660,18 @@ export class LearnersService {
   }
 
   private async createSingleLearner(learnerData: BulkCreateLearnerDto): Promise<Learner> {
+    const normalizedLearner = this.normalizeBulkLearnerDto(learnerData);
+
     return this.prisma.$transaction(
       async (prisma) => {
-        const referential = learnerData.refId
-          ? await prisma.referential.findUnique({ where: { id: learnerData.refId } })
+        const referential = normalizedLearner.refId
+          ? await prisma.referential.findUnique({ where: { id: normalizedLearner.refId } })
           : null;
 
         const matricule = await MatriculeUtils.generateLearnerMatricule(
           prisma as PrismaClient,
-          learnerData.firstName,
-          learnerData.lastName,
+          normalizedLearner.firstName,
+          normalizedLearner.lastName,
           referential?.name,
         );
 
@@ -689,34 +712,34 @@ export class LearnersService {
         const learner = await prisma.learner.create({
           data: {
             matricule,
-            firstName: learnerData.firstName,
-            lastName: learnerData.lastName,
-            address: learnerData.address,
-            gender: learnerData.gender,
-            birthDate: learnerData.birthDate,
-            birthPlace: learnerData.birthPlace,
-            phone: learnerData.phone,
+            firstName: normalizedLearner.firstName,
+            lastName: normalizedLearner.lastName,
+            address: normalizedLearner.address,
+            gender: normalizedLearner.gender,
+            birthDate: normalizedLearner.birthDate,
+            birthPlace: normalizedLearner.birthPlace,
+            phone: normalizedLearner.phone,
             qrCode: qrCodeUrl,
-            status: learnerData.status || LearnerStatus.ACTIVE,
+            status: normalizedLearner.status || LearnerStatus.ACTIVE,
             user: {
               create: {
-                email: learnerData.email,
+                email: normalizedLearner.email,
                 password: hashedPassword,
                 role: 'APPRENANT',
               },
             },
             tutor: {
               create: {
-                firstName: learnerData.tutorFirstName,
-                lastName: learnerData.tutorLastName,
-                phone: learnerData.tutorPhone,
-                email: learnerData.tutorEmail,
-                address: learnerData.tutorAddress,
+                firstName: normalizedLearner.tutorFirstName,
+                lastName: normalizedLearner.tutorLastName,
+                phone: normalizedLearner.tutorPhone,
+                email: normalizedLearner.tutorEmail,
+                address: normalizedLearner.tutorAddress,
               },
             },
-            promotion: { connect: { id: learnerData.promotionId } },
-            referential: learnerData.refId
-              ? { connect: { id: learnerData.refId } }
+            promotion: { connect: { id: normalizedLearner.promotionId } },
+            referential: normalizedLearner.refId
+              ? { connect: { id: normalizedLearner.refId } }
               : undefined,
             kit: {
               create: {
@@ -726,8 +749,8 @@ export class LearnersService {
                 polo: false,
               },
             },
-            session: learnerData.sessionId
-              ? { connect: { id: learnerData.sessionId } }
+            session: normalizedLearner.sessionId
+              ? { connect: { id: normalizedLearner.sessionId } }
               : undefined,
           },
           include: {
@@ -750,9 +773,9 @@ export class LearnersService {
         });
 
         try {
-          await this.emailService.sendLearnerApprovalEmail(learnerData.email, password, {
-            firstName: learnerData.firstName,
-            lastName: learnerData.lastName,
+          await this.emailService.sendLearnerApprovalEmail(normalizedLearner.email, password, {
+            firstName: normalizedLearner.firstName,
+            lastName: normalizedLearner.lastName,
             matricule: learner.matricule,
           });
         } catch (emailError) {
@@ -766,10 +789,15 @@ export class LearnersService {
   }
 
   async resendCredentialsByEmail(email: string): Promise<{ success: true; message: string }> {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
       include: {
         learner: {
           select: {
@@ -936,7 +964,9 @@ export class LearnersService {
       Object.entries(columnMapping).forEach(([field, index]) => {
         const value = values[index]?.trim();
         if (value) {
-          (learner as any)[field] = value;
+          (learner as any)[field] = field === 'email' || field === 'tutorEmail'
+            ? normalizeEmail(value)
+            : value;
         }
       });
 
@@ -1137,8 +1167,19 @@ export class LearnersService {
   }
 
   async findByEmail(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
+      return [];
+    }
     const learners = await this.prisma.learner.findMany({
-      where: { user: { email } },
+      where: {
+        user: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },

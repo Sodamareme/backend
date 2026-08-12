@@ -9,6 +9,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { EmailService } from '../email/email.service';
+import { normalizeEmail } from '../utils/email.utils';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -21,7 +22,7 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmail(normalizeEmail(email));
     if (user && await bcrypt.compare(password, user.password)) {
       const { password, ...result } = user;
       return result;
@@ -30,13 +31,9 @@ export class AuthService {
   }
 
   async login(user: LoginDto) {
-    const normalizedEmail = user.email.trim().toLowerCase();
-    
-    const emailExist = await this.prisma.user.findUnique({
-      where: {
-        email: normalizedEmail
-      }
-    });
+    const normalizedEmail = normalizeEmail(user.email);
+
+    const emailExist = await this.usersService.findByEmail(normalizedEmail);
 
     if (!emailExist) {
       throw new UnauthorizedException('Email ou mot de passe incorrect');
@@ -164,11 +161,9 @@ export class AuthService {
    * Demander la réinitialisation du mot de passe
    */
 async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    const normalizedEmail = forgotPasswordDto.email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(forgotPasswordDto.email);
 
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail }
-    });
+    const user = await this.usersService.findByEmail(normalizedEmail);
 
     if (!user) {
       return {

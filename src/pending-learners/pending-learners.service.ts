@@ -11,6 +11,7 @@ import { CreatePendingLearnerDto } from './dto/create-pending-learner.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { EmailService } from '../email/email.service';
 import { LearnersService } from '../learners/learners.service';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils';
 
 @Injectable()
 export class PendingLearnersService {
@@ -35,7 +36,7 @@ export class PendingLearnersService {
       firstName: rawTutor?.firstName?.trim() || '',
       lastName: rawTutor?.lastName?.trim() || '',
       phone: rawTutor?.phone?.trim() || '',
-      email: rawTutor?.email?.trim() || undefined,
+      email: normalizeEmailOrUndefined(rawTutor?.email),
       address: rawTutor?.address?.trim() || undefined,
     };
   }
@@ -67,6 +68,8 @@ export class PendingLearnersService {
     dto: CreatePendingLearnerDto,
     photoFile?: Express.Multer.File,
   ) {
+    const normalizedEmail = normalizeEmail(dto.email);
+
     if (!dto.firstName?.trim()) {
       throw new BadRequestException('Le prenom est requis');
     }
@@ -119,7 +122,7 @@ export class PendingLearnersService {
 
     const existingLearner = await this.prisma.learner.findFirst({
       where: {
-        OR: [{ user: { email: dto.email } }, { phone: dto.phone }],
+        OR: [{ user: { email: { equals: normalizedEmail, mode: 'insensitive' } } }, { phone: dto.phone }],
       },
     });
 
@@ -150,7 +153,7 @@ export class PendingLearnersService {
       {
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
-        email: dto.email.trim().toLowerCase(),
+        email: normalizedEmail,
         phone: dto.phone.trim(),
         address: dto.address.trim(),
         gender: dto.gender,
@@ -207,12 +210,13 @@ export class PendingLearnersService {
     }
 
     const tutor = this.normalizeTutor(pendingLearner.tutorData as CreatePendingLearnerDto['tutor']);
+    const normalizedEmail = normalizeEmail(pendingLearner.email);
 
     const learner = await this.learnersService.create(
       {
         firstName: pendingLearner.firstName,
         lastName: pendingLearner.lastName,
-        email: pendingLearner.email,
+        email: normalizedEmail,
         phone: pendingLearner.phone,
         address: pendingLearner.address,
         gender: pendingLearner.gender,
@@ -246,6 +250,7 @@ export class PendingLearnersService {
 
   async rejectPendingLearner(id: string, reviewedBy: string, reason?: string) {
     const pendingLearner = await this.getPendingLearnerById(id);
+    const normalizedEmail = normalizeEmail(pendingLearner.email);
 
     if (pendingLearner.status !== PendingStatus.PENDING) {
       throw new BadRequestException('Cette demande a deja ete traitee');
@@ -262,7 +267,7 @@ export class PendingLearnersService {
     });
 
     await this.emailService.sendLearnerRejectionEmail(
-      pendingLearner.email,
+      normalizedEmail,
       {
         firstName: pendingLearner.firstName,
         lastName: pendingLearner.lastName,

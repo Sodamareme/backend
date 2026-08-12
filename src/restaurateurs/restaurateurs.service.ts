@@ -5,6 +5,7 @@ import { AuthUtils } from '../utils/auth.utils';
 import { Restaurateur } from '@prisma/client';
 import { CreateRestaurateurDto } from './dto/create-restaurateur.dto';
 import * as fs from 'fs';
+import { normalizeEmail } from '../utils/email.utils';
 
 @Injectable()
 export class RestaurateursService {
@@ -17,12 +18,13 @@ export class RestaurateursService {
 
   async create(createRestaurateurDto: CreateRestaurateurDto, photoFile?: Express.Multer.File): Promise<Restaurateur> {
     this.logger.debug('Creating restaurateur');
+    const normalizedEmail = normalizeEmail(createRestaurateurDto.email);
 
     const existingRestaurateur = await this.prisma.restaurateur.findFirst({
       where: {
         OR: [
           { phone: createRestaurateurDto.phone },
-          { user: { email: createRestaurateurDto.email } },
+          { user: { email: { equals: normalizedEmail, mode: 'insensitive' } } },
         ],
       },
     });
@@ -73,7 +75,7 @@ export class RestaurateursService {
           photoUrl,
           user: {
             create: {
-              email: createRestaurateurDto.email,
+              email: normalizedEmail,
               password: hashedPassword,
               role: 'RESTAURATEUR',
             },
@@ -85,7 +87,7 @@ export class RestaurateursService {
       });
 
       // Send password email after successful creation
-      await AuthUtils.sendPasswordEmail(createRestaurateurDto.email, password, 'Restaurateur');
+      await AuthUtils.sendPasswordEmail(normalizedEmail, password, 'Restaurateur');
 
       this.logger.log(`Restaurateur created: ${restaurateur.id}`);
       return restaurateur;

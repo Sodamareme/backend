@@ -1,6 +1,7 @@
 import { IsString, IsEmail, IsOptional } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { normalizeEmail } from '../../utils/email.utils';
 
 export class CreateVigilDto {
   @ApiProperty({ description: 'First name of the vigil' })
@@ -21,6 +22,6 @@ export class CreateVigilDto {
 
   @ApiProperty({ description: 'Email address of the vigil' })
   @IsEmail()
-  @Transform(({ value }) => value?.trim().toLowerCase())
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 }

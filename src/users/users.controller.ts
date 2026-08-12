@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { normalizeEmail } from '../utils/email.utils';
 
 @ApiTags('users')
 @Controller('users')
@@ -14,7 +15,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   private assertAdminOrOwner(req: any, email: string) {
-    if (req.user.role !== UserRole.ADMIN && req.user.email !== email) {
+    const currentEmail = normalizeEmail(req.user.email);
+    const targetEmail = normalizeEmail(email);
+
+    if (req.user.role !== UserRole.ADMIN && currentEmail !== targetEmail) {
       throw new ForbiddenException('You can only access your own data');
     }
   }
@@ -36,17 +40,19 @@ export class UsersController {
   @Get('photo/:email')
   @ApiOperation({ summary: 'Get user photo URL by email' })
   async getUserPhoto(@Param('email') email: string, @Request() req) {
-    this.assertAdminOrOwner(req, email);
-    return this.usersService.getUserPhotoByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    this.assertAdminOrOwner(req, normalizedEmail);
+    return this.usersService.getUserPhotoByEmail(normalizedEmail);
   }
 
   @Get('email/:email')
   @ApiOperation({ summary: 'Get user by email with details' })
   async getUserByEmail(@Param('email') email: string, @Request() req) {
-    this.assertAdminOrOwner(req, email);
-    const user = await this.usersService.findByEmail(email);
+    const normalizedEmail = normalizeEmail(email);
+    this.assertAdminOrOwner(req, normalizedEmail);
+    const user = await this.usersService.findByEmail(normalizedEmail);
     if (!user) {
-      throw new NotFoundException(`User with email ${email} not found`);
+      throw new NotFoundException(`User with email ${normalizedEmail} not found`);
     }
     const details = await this.usersService.getUserDetailsByRole(user);
     const { password, ...safeUser } = user;

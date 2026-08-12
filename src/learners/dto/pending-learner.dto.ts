@@ -1,7 +1,8 @@
 // src/learners/dto/pending-learner.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, IsNotEmpty, IsEnum, ValidateNested, MinLength, Matches, IsOptional } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { normalizeEmail, normalizeEmailOrUndefined } from '../../utils/email.utils';
 
 enum Gender {
   MALE = 'MALE',
@@ -29,6 +30,7 @@ class TutorDto {
   @ApiProperty({ example: 'tuteur@example.com', required: false })
   @IsEmail()
   @IsOptional()
+  @Transform(({ value }) => normalizeEmailOrUndefined(value))
   email?: string;
 
   @ApiProperty({ example: 'Dakar, Senegal' })
@@ -54,6 +56,7 @@ export class CreatePendingLearnerDto {
   @ApiProperty({ example: 'moussa.diallo@example.com' })
   @IsEmail()
   @IsNotEmpty()
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 
   @ApiProperty({ example: '+221771234567' })

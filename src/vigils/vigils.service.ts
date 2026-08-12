@@ -5,6 +5,7 @@ import { AuthUtils } from '../utils/auth.utils';
 import { Vigil } from '@prisma/client';
 import { CreateVigilDto } from './dto/create-vigil.dto';
 import * as fs from 'fs';
+import { normalizeEmail } from '../utils/email.utils';
 
 @Injectable()
 export class VigilsService {
@@ -17,12 +18,13 @@ export class VigilsService {
 
   async create(createVigilDto: CreateVigilDto, photoFile?: Express.Multer.File): Promise<Vigil> {
     this.logger.debug('Creating vigil');
+    const normalizedEmail = normalizeEmail(createVigilDto.email);
 
     const existingVigil = await this.prisma.vigil.findFirst({
       where: {
         OR: [
           { phone: createVigilDto.phone },
-          { user: { email: createVigilDto.email } },
+          { user: { email: { equals: normalizedEmail, mode: 'insensitive' } } },
         ],
       },
     });
@@ -54,12 +56,12 @@ export class VigilsService {
           lastName: createVigilDto.lastName,
           phone: createVigilDto.phone,
           photoUrl,
-          user: {
-            create: {
-              email: createVigilDto.email,
-              password: hashedPassword,
-              role: 'VIGIL',
-            },
+        user: {
+          create: {
+            email: normalizedEmail,
+            password: hashedPassword,
+            role: 'VIGIL',
+          },
           },
         },
         include: {
@@ -68,7 +70,7 @@ export class VigilsService {
       });
 
       // Send password email after successful creation
-      await AuthUtils.sendPasswordEmail(createVigilDto.email, password, 'Vigil');
+      await AuthUtils.sendPasswordEmail(normalizedEmail, password, 'Vigil');
 
       this.logger.log(`Vigil created: ${vigil.id}`);
       return vigil;

@@ -6,7 +6,9 @@ import {
   IsDateString,
   IsOptional,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { Gender } from '@prisma/client';
+import { normalizeEmail } from '../../utils/email.utils';
 
 export class CreatePendingLearnerDto {
   @IsString()
@@ -18,6 +20,7 @@ export class CreatePendingLearnerDto {
   lastName: string;
 
   @IsEmail()
+  @Transform(({ value }) => normalizeEmail(value))
   email: string;
 
   @IsString()
