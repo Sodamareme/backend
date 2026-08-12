@@ -36,6 +36,32 @@ export class EmailService {
     return this.configService.get('MAIL_FROM_NAME') || 'ODC Inside';
   }
 
+  private async sendMailWithRetry(
+    mailOptions: nodemailer.SendMailOptions,
+    context: string,
+    attempts = 3,
+  ) {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await this.transporter.sendMail(mailOptions);
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(
+          `⚠️ Email send attempt ${attempt}/${attempts} failed for ${context}`,
+        );
+
+        if (attempt < attempts) {
+          const delayMs = attempt * 1000;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
   /**
    * Envoyer l'email de réinitialisation de mot de passe
    */
@@ -183,8 +209,11 @@ ODC Inside - Orange Digital Center
 © ${new Date().getFullYear()} Sonatel. Tous droits réservés.
       `,
     };
- try {
-      const info = await this.transporter.sendMail(mailOptions);
+    try {
+      const info = await this.sendMailWithRetry(
+        mailOptions,
+        `password reset email to ${email}`,
+      );
       this.logger.log(`✅ Password reset email sent to ${email}`);
       this.logger.log(`📧 Message ID: ${info.messageId}`);
     } catch (error) {
@@ -233,7 +262,10 @@ ODC Inside - Orange Digital Center
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMailWithRetry(
+        mailOptions,
+        `password reset confirmation to ${email}`,
+      );
       this.logger.log(`✅ Password reset confirmation sent to ${email}`);
     } catch (error) {
       this.logger.error(`❌ Failed to send confirmation to ${email}:`, error);
