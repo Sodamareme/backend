@@ -1170,6 +1170,7 @@ export class LearnersService {
           select: {
             id: true,
             name: true,
+            startDate: true,
           },
         },
         tutor: {
@@ -1261,6 +1262,7 @@ export class LearnersService {
         ? {
             id: learner.promotion.id,
             name: learner.promotion.name,
+            startDate: learner.promotion.startDate,
           }
         : null,
     };
