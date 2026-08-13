@@ -11,6 +11,7 @@ import {
   AbsenceStatus,
   LearnerAttendance,
   LearnerStatus,
+  PromotionStatus,
   Prisma,
 } from "@prisma/client";
 import {
@@ -129,6 +130,20 @@ export class AttendanceService {
     );
   }
 
+  private getPromotionScopeWhere(promotionId?: string | null): Prisma.LearnerWhereInput {
+    const selectedPromotionId = promotionId?.trim();
+
+    if (selectedPromotionId) {
+      return { promotionId: selectedPromotionId };
+    }
+
+    return {
+      promotion: {
+        status: PromotionStatus.ACTIVE,
+      },
+    };
+  }
+
   private async computeAttendanceLeaderboard(params: {
     period?: "week" | "month" | "quarter" | "year" | "custom";
     promotionId?: string;
@@ -145,13 +160,14 @@ export class AttendanceService {
       startDate: params.startDate,
       endDate: params.endDate,
     });
+    const promotionScopeWhere = this.getPromotionScopeWhere(params.promotionId);
 
     const learners = await this.prisma.learner.findMany({
       where: {
         status: {
           in: ["ACTIVE", "REPLACEMENT"],
         },
-        ...(params.promotionId ? { promotionId: params.promotionId } : {}),
+        ...promotionScopeWhere,
         ...(params.referentialId ? { refId: params.referentialId } : {}),
       },
       include: {
@@ -699,12 +715,24 @@ export class AttendanceService {
       refId?: string | null;
       sessionId?: string | null;
       promotionId?: string | null;
+      promotion?: {
+        status?: PromotionStatus | string | null;
+      } | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
     sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
     targetDate: Date,
   ): string | null {
     const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
+
+    if (
+      learner.promotion &&
+      learner.promotion.status &&
+      learner.promotion.status !== PromotionStatus.ACTIVE
+    ) {
+      return "La promotion de cet apprenant n'est pas active. Aucun pointage n'est autorisé.";
+    }
+
     const closureState = this.getLearnerAttendanceClosureState(
       learner,
       referentialAttendanceClosures,
@@ -1659,7 +1687,11 @@ export class AttendanceService {
 
   // Dans attendance.service.ts - Méthode corrigée
 
-  async getAbsentsByReferential(date: string, referentialId: string) {
+  async getAbsentsByReferential(
+    date: string,
+    referentialId: string,
+    promotionId?: string,
+  ) {
     try {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
@@ -1677,6 +1709,7 @@ export class AttendanceService {
           status: {
             in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
           },
+          ...this.getPromotionScopeWhere(promotionId),
         },
         select: {
           id: true,
@@ -1805,16 +1838,17 @@ export class AttendanceService {
   }
 
   // ✅ Également corriger getDailyStats pour filtrer par référentiel
-  async getDailyStats(date: string, referentialId?: string) {
+  async getDailyStats(date: string, referentialId?: string, promotionId?: string) {
     try {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
 
       // ✅ 1. Récupérer tous les apprenants attendus
-      const learnersWhere: any = {
+      const learnersWhere: Prisma.LearnerWhereInput = {
         status: {
           in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
         },
+        ...this.getPromotionScopeWhere(promotionId),
       };
       if (referentialId) learnersWhere.refId = referentialId;
 
@@ -1870,8 +1904,10 @@ export class AttendanceService {
       );
 
       // ✅ 2. Récupérer les pointages du jour
-      const whereClause: any = { date: targetDate };
-      if (referentialId) whereClause.learner = { refId: referentialId };
+      const whereClause: Prisma.LearnerAttendanceWhereInput = {
+        date: targetDate,
+        learner: learnersWhere,
+      };
 
       const rawAttendanceRecords = await this.prisma.learnerAttendance.findMany({
         where: whereClause,
@@ -1957,7 +1993,7 @@ export class AttendanceService {
     }
   }
 
-  async getMonthlyStats(year: number, month: number) {
+  async getMonthlyStats(year: number, month: number, promotionId?: string) {
     const startDate = new Date(year, month - 1, 1);
     startDate.setHours(0, 0, 0, 0);
 
@@ -1969,6 +2005,12 @@ export class AttendanceService {
         date: {
           gte: startDate,
           lte: endDate,
+        },
+        learner: {
+          status: {
+            in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+          },
+          ...this.getPromotionScopeWhere(promotionId),
         },
       },
       include: {
@@ -2007,7 +2049,7 @@ export class AttendanceService {
     return { days };
   }
 
-  async getYearlyStats(year: number) {
+  async getYearlyStats(year: number, promotionId?: string) {
     const startDate = new Date(year, 0, 1);
     startDate.setHours(0, 0, 0, 0);
 
@@ -2019,6 +2061,12 @@ export class AttendanceService {
         date: {
           gte: startDate,
           lte: endDate,
+        },
+        learner: {
+          status: {
+            in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+          },
+          ...this.getPromotionScopeWhere(promotionId),
         },
       },
       include: {
@@ -2054,6 +2102,7 @@ export class AttendanceService {
     startDate: string,
     endDate: string,
     referentialId?: string,
+    promotionId?: string,
   ) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -2075,6 +2124,7 @@ export class AttendanceService {
           status: {
             in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
           },
+          ...this.getPromotionScopeWhere(promotionId),
           ...(referentialId ? { refId: referentialId } : {}),
         },
       },
@@ -2208,6 +2258,7 @@ export class AttendanceService {
       period: params?.period || "month",
       startDate: params?.startDate,
       endDate: params?.endDate,
+      promotionId: learner.promotionId ?? undefined,
       referentialId: learner.refId,
       limit: 5,
     });
@@ -2239,7 +2290,7 @@ export class AttendanceService {
     };
   }
 
-  async getWeeklyStats(year: number) {
+  async getWeeklyStats(year: number, promotionId?: string) {
     try {
       const startDate = new Date(year, 0, 1);
       startDate.setHours(0, 0, 0, 0);
@@ -2252,6 +2303,12 @@ export class AttendanceService {
           date: {
             gte: startDate,
             lte: endDate,
+          },
+          learner: {
+            status: {
+              in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
+            },
+            ...this.getPromotionScopeWhere(promotionId),
           },
         },
         include: {

@@ -201,9 +201,10 @@ export class AttendanceController {
   async getAbsentsByReferential(
     @Param('referentialId') referentialId: string,
     @Query('date') date: string,
+    @Query('promotionId') promotionId?: string,
   ) {
     const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.attendanceService.getAbsentsByReferential(targetDate, referentialId);
+    return this.attendanceService.getAbsentsByReferential(targetDate, referentialId, promotionId);
   }
 
   // ✅ SURVEILLANT a accès — lecture des stats journalières
@@ -212,9 +213,10 @@ export class AttendanceController {
   async getDailyStats(
     @Query('date') date: string,
     @Query('referentialId') referentialId?: string,
+    @Query('promotionId') promotionId?: string,
   ) {
     const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.attendanceService.getDailyStats(targetDate, referentialId);
+    return this.attendanceService.getDailyStats(targetDate, referentialId, promotionId);
   }
 
   // ✅ SURVEILLANT a accès — lecture des stats mensuelles
@@ -224,15 +226,19 @@ export class AttendanceController {
   async getMonthlyStats(
     @Query('year') year: string,
     @Query('month') month: string,
+    @Query('promotionId') promotionId?: string,
   ): Promise<MonthlyStats> {
-    return this.attendanceService.getMonthlyStats(parseInt(year, 10), parseInt(month, 10));
+    return this.attendanceService.getMonthlyStats(parseInt(year, 10), parseInt(month, 10), promotionId);
   }
 
   // ✅ SURVEILLANT a accès — lecture des stats annuelles
   @Get('stats/yearly')
   @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
-  async getYearlyStats(@Query('year') year: string) {
-    return this.attendanceService.getYearlyStats(parseInt(year, 10));
+  async getYearlyStats(
+    @Query('year') year: string,
+    @Query('promotionId') promotionId?: string,
+  ) {
+    return this.attendanceService.getYearlyStats(parseInt(year, 10), promotionId);
   }
 
   @Get('records')
@@ -242,8 +248,9 @@ export class AttendanceController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('referentialId') referentialId?: string,
+    @Query('promotionId') promotionId?: string,
   ) {
-    return this.attendanceService.getAttendanceRecords(startDate, endDate, referentialId);
+    return this.attendanceService.getAttendanceRecords(startDate, endDate, referentialId, promotionId);
   }
 
   @Get('stats/at-risk-learners')
@@ -296,8 +303,11 @@ export class AttendanceController {
   @Get('stats/weekly')
   @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL)
   @ApiOperation({ summary: 'Get weekly attendance statistics for a year' })
-  async getWeeklyStats(@Query('year') year: string) {
-    return this.attendanceService.getWeeklyStats(parseInt(year, 10));
+  async getWeeklyStats(
+    @Query('year') year: string,
+    @Query('promotionId') promotionId?: string,
+  ) {
+    return this.attendanceService.getWeeklyStats(parseInt(year, 10), promotionId);
   }
 
   // ❌ SURVEILLANT n'a pas accès — action ADMIN uniquement
