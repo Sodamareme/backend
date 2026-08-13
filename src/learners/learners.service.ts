@@ -198,6 +198,18 @@ export class LearnersService {
               throw new NotFoundException('Référentiel introuvable');
             }
 
+            const referentialClosureRows = await prisma.$queryRaw<
+              Array<{ attendanceClosedAt: Date | null }>
+            >(
+              Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${normalizedCreateLearnerDto.refId}`,
+            );
+
+            if (referentialClosureRows[0]?.attendanceClosedAt) {
+              throw new BadRequestException(
+                'Les inscriptions sont fermées pour ce référentiel.',
+              );
+            }
+
             // ✅ Vérification sessions
             if (referential.numberOfSessions > 1) {
               if (!normalizedCreateLearnerDto.sessionId) {
@@ -213,6 +225,18 @@ export class LearnersService {
               if (!session) {
                 throw new BadRequestException(
                   `Session invalide. Sessions disponibles: ${referential.sessions.map((s) => s.name).join(', ')}`,
+                );
+              }
+
+              const sessionClosureRows = await prisma.$queryRaw<
+                Array<{ attendanceClosedAt: Date | null }>
+              >(
+                Prisma.sql`SELECT "attendanceClosedAt" FROM "Session" WHERE id = ${normalizedCreateLearnerDto.sessionId}`,
+              );
+
+              if (sessionClosureRows[0]?.attendanceClosedAt) {
+                throw new BadRequestException(
+                  `Les inscriptions sont fermées pour ${session.name}. Veuillez choisir une session ouverte.`,
                 );
               }
 
@@ -471,11 +495,43 @@ export class LearnersService {
         include: { sessions: { select: { id: true, name: true, capacity: true } } },
       });
 
+      const referentialClosureRows = await this.prisma.$queryRaw<
+        Array<{ attendanceClosedAt: Date | null }>
+      >(
+        Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${dto.refId}`,
+      );
+
+      if (referentialClosureRows[0]?.attendanceClosedAt) {
+        throw new BadRequestException(
+          'Les inscriptions sont fermées pour ce référentiel.',
+        );
+      }
+
       if (referential && referential.numberOfSessions > 1 && !dto.sessionId) {
         throw new BadRequestException(
           `Ce référentiel a plusieurs sessions. Veuillez spécifier un sessionId. ` +
           `Sessions disponibles: ${referential.sessions.map((s) => `${s.name} (id: ${s.id})`).join(', ')}`,
         );
+      }
+
+      if (referential && referential.numberOfSessions > 1 && dto.sessionId) {
+        const session = referential.sessions.find((item) => item.id === dto.sessionId);
+
+        if (!session) {
+          throw new BadRequestException('La session sélectionnée est invalide.');
+        }
+
+        const sessionClosureRows = await this.prisma.$queryRaw<
+          Array<{ attendanceClosedAt: Date | null }>
+        >(
+          Prisma.sql`SELECT "attendanceClosedAt" FROM "Session" WHERE id = ${dto.sessionId}`,
+        );
+
+        if (sessionClosureRows[0]?.attendanceClosedAt) {
+          throw new BadRequestException(
+            `Les inscriptions sont fermées pour ${session.name}. Veuillez choisir une session ouverte.`,
+          );
+        }
       }
     }
   }
