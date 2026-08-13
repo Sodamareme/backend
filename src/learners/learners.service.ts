@@ -1623,7 +1623,7 @@ export class LearnersService {
       cohortAttendanceRecords.map((record) => record.date),
     );
 
-    const expectedDays = attendanceWindow.shouldCountAttendance
+    const cohortExpectedDays = attendanceWindow.shouldCountAttendance
       ? new Set(
           cohortAttendanceRecords
             .filter(
@@ -1641,10 +1641,15 @@ export class LearnersService {
           (record) =>
             record.learnerId === id &&
             this.isInstructionDay(record.date) &&
-            !blockedAttendanceDays.has(this.getAttendanceDayKey(record.date)) &&
-            this.isAttendanceOnOrAfterStart(record.date, attendanceWindow.startDate),
+            !blockedAttendanceDays.has(this.getAttendanceDayKey(record.date)),
         )
       : [];
+    const expectedDays = new Set([
+      ...cohortExpectedDays,
+      ...learnerAttendanceRecords.map((record) =>
+        this.getAttendanceDayKey(record.date),
+      ),
+    ]);
 
     const attendedDays = new Set(
       learnerAttendanceRecords
