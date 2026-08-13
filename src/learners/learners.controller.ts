@@ -40,6 +40,8 @@ import { LearnersReferenceQueryDto } from './dto/learners-reference-query.dto';
 import { validateFileUpload, validateImageUpload } from '../common/image-upload.util';
 import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils';
 
+const SERVICE_ROLE = 'SERVICE' as UserRole;
+
 type LearnerTutorFormInput = Partial<CreateTutorDto>;
 
 type LearnerCreateFormData = Partial<Omit<CreateLearnerDto, 'tutor'>> & {
@@ -77,7 +79,11 @@ export class LearnersController {
     const currentEmail = normalizeEmail(req.user.email);
     const learnerEmail = normalizeEmail(learner.user?.email);
 
-    if (req.user.role !== UserRole.ADMIN && currentEmail !== learnerEmail) {
+    if (
+      req.user.role !== UserRole.ADMIN &&
+      req.user.role !== SERVICE_ROLE &&
+      currentEmail !== learnerEmail
+    ) {
       throw new ForbiddenException('You can only access your own data');
     }
   }
@@ -251,7 +257,11 @@ export class LearnersController {
     const normalizedEmail = normalizeEmail(email);
     const currentEmail = normalizeEmail(req.user.email);
 
-    if (req.user.role !== UserRole.ADMIN && currentEmail !== normalizedEmail) {
+    if (
+      req.user.role !== UserRole.ADMIN &&
+      req.user.role !== SERVICE_ROLE &&
+      currentEmail !== normalizedEmail
+    ) {
       throw new ForbiddenException('You can only access your own data');
     }
     return this.learnersService.findByEmail(normalizedEmail);
@@ -272,7 +282,7 @@ export class LearnersController {
   }
 
   @Get('reference-list')
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR, SERVICE_ROLE)
   @ApiOperation({
     summary:
       "Récupérer une liste légère d'apprenants pour intégration et filtres",
