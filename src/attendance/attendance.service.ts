@@ -148,6 +148,7 @@ export class AttendanceService {
     period?: "week" | "month" | "quarter" | "year" | "custom";
     promotionId?: string;
     referentialId?: string;
+    sessionId?: string;
     limit?: number;
     startDate?: string;
     endDate?: string;
@@ -169,6 +170,7 @@ export class AttendanceService {
         },
         ...promotionScopeWhere,
         ...(params.referentialId ? { refId: params.referentialId } : {}),
+        ...(params.sessionId ? { sessionId: params.sessionId } : {}),
       },
       include: {
         promotion: {
@@ -245,6 +247,7 @@ export class AttendanceService {
         filters: {
           promotionId: params.promotionId || null,
           referentialId: params.referentialId || null,
+          sessionId: params.sessionId || null,
           limit,
         },
         expectedDays: 0,
@@ -403,13 +406,7 @@ export class AttendanceService {
           )
         : null;
 
-      const shouldKeepHistoricalRecord =
-        record.isPresent || Boolean(record.scanTime);
-
-      if (
-        !shouldKeepHistoricalRecord &&
-        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)
-      ) {
+      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
         return;
       }
 
@@ -469,18 +466,12 @@ export class AttendanceService {
         return;
       }
 
-      const learnerExpectedDays = new Set(
-        Array.from(cohortExpectedDays).filter((dayKey) => {
+      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
+        (dayKey) => {
           const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
           return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
-        }),
-      );
-
-      existingLearner.attendedDays.forEach((dayKey) => {
-        learnerExpectedDays.add(dayKey);
-      });
-
-      existingLearner.expectedDays = learnerExpectedDays.size;
+        },
+      ).length;
     });
 
     const learnersWithStats = Array.from(learnersMap.values()).map(
@@ -549,6 +540,7 @@ export class AttendanceService {
       filters: {
         promotionId: params.promotionId || null,
         referentialId: params.referentialId || null,
+        sessionId: params.sessionId || null,
         limit,
       },
       expectedDays: cohortExpectedDays.size,
@@ -2387,6 +2379,7 @@ export class AttendanceService {
       endDate: params?.endDate,
       promotionId: learner.promotionId ?? undefined,
       referentialId: learner.refId,
+      sessionId: learner.sessionId ?? undefined,
       limit: 5,
     });
 
