@@ -118,6 +118,21 @@ export class PromotionsController {
     return this.promotionsService.update(id, { status: updateStatusDto.status });
   }
 
+  @Patch(':id/registration')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Ouvrir ou fermer les inscriptions publiques d une promotion' })
+  async updateRegistration(
+    @Param('id') id: string,
+    @Body('registrationOpen') registrationOpen: boolean,
+  ): Promise<Promotion> {
+    if (typeof registrationOpen !== 'boolean') {
+      throw new BadRequestException('Le statut des inscriptions est requis');
+    }
+
+    return this.promotionsService.updateRegistration(id, registrationOpen);
+  }
+
   @Post(':id/referentials')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Add referentials to a promotion' })

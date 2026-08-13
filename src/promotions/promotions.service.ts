@@ -1,7 +1,7 @@
 import { Injectable, ConflictException, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Promotion, PromotionStatus } from '@prisma/client';
+import { Prisma, Promotion, PromotionStatus } from '@prisma/client';
 import * as fs from 'fs';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 
@@ -30,6 +30,44 @@ export class PromotionsService {
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
   ) {}
+
+  private async getRegistrationOpenMap(promotionIds: string[]) {
+    if (!promotionIds.length) {
+      return new Map<string, boolean>();
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ id: string; registrationOpen: boolean }>>(
+        Prisma.sql`SELECT id, "registrationOpen" FROM "Promotion" WHERE id IN (${Prisma.join(promotionIds)})`,
+      );
+
+      return new Map(rows.map((row) => [row.id, row.registrationOpen]));
+    } catch (error) {
+      this.logger.warn(
+        `Impossible de lire registrationOpen sur Promotion, fallback à true: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return new Map(promotionIds.map((id) => [id, true]));
+    }
+  }
+
+  private async attachRegistrationOpen<T extends { id: string }>(promotion: T) {
+    const registrationOpenMap = await this.getRegistrationOpenMap([promotion.id]);
+    return {
+      ...promotion,
+      registrationOpen: registrationOpenMap.get(promotion.id) ?? true,
+    };
+  }
+
+  private async attachRegistrationOpenList<T extends { id: string }>(promotions: T[]) {
+    const registrationOpenMap = await this.getRegistrationOpenMap(
+      promotions.map((promotion) => promotion.id),
+    );
+
+    return promotions.map((promotion) => ({
+      ...promotion,
+      registrationOpen: registrationOpenMap.get(promotion.id) ?? true,
+    }));
+  }
 
   async create(data: CreatePromotionDto, photoFile?: Express.Multer.File): Promise<Promotion> {
     try {
@@ -80,7 +118,7 @@ export class PromotionsService {
         }
 
         // Create the promotion
-        return prisma.promotion.create({
+        const promotion = await prisma.promotion.create({
           data: {
             name: data.name,
             startDate: new Date(data.startDate),
@@ -96,6 +134,14 @@ export class PromotionsService {
             learners: true
           }
         });
+
+        if (data.registrationOpen !== undefined) {
+          await prisma.$executeRaw(
+            Prisma.sql`UPDATE "Promotion" SET "registrationOpen" = ${data.registrationOpen} WHERE id = ${promotion.id}`,
+          );
+        }
+
+        return promotion;
       }, {
         timeout: 30000, // 30 second timeout for the transaction
         maxWait: 35000  // Maximum time to wait for transaction
@@ -106,7 +152,7 @@ export class PromotionsService {
         await this.updateSessionDatesInBatches(newPromotion.id, referentialIds);
       }
 
-      return newPromotion;
+      return this.attachRegistrationOpen(newPromotion) as Promise<Promotion>;
     } catch (error) {
       this.logger.error('Failed to create promotion:', error);
       
@@ -163,16 +209,18 @@ export class PromotionsService {
   }
 
   async findAll(): Promise<Promotion[]> {
-    return this.prisma.promotion.findMany({
+    const promotions = await this.prisma.promotion.findMany({
       include: {
         learners: true,
         referentials: true,
       },
     });
+
+    return this.attachRegistrationOpenList(promotions) as Promise<Promotion[]>;
   }
 
   async findAllPublic() {
-    return this.prisma.promotion.findMany({
+    const promotions = await this.prisma.promotion.findMany({
       select: {
         id: true,
         name: true,
@@ -196,6 +244,8 @@ export class PromotionsService {
         },
       },
     });
+
+    return this.attachRegistrationOpenList(promotions);
   }
 
   async findOne(id: string): Promise<Promotion> {
@@ -212,7 +262,7 @@ export class PromotionsService {
       throw new NotFoundException(`Promotion with ID ${id} not found`);
     }
 
-    return promotion;
+    return this.attachRegistrationOpen(promotion) as Promise<Promotion>;
   }
 
   async update(id: string, data: Partial<Promotion>): Promise<Promotion> {
@@ -275,6 +325,23 @@ export class PromotionsService {
     }
   }
 
+  async updateRegistration(id: string, registrationOpen: boolean): Promise<Promotion> {
+    const promotion = await this.prisma.promotion.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!promotion) {
+      throw new NotFoundException(`Promotion with ID ${id} not found`);
+    }
+
+    await this.prisma.$executeRaw(
+      Prisma.sql`UPDATE "Promotion" SET "registrationOpen" = ${registrationOpen}, "updatedAt" = NOW() WHERE id = ${id}`,
+    );
+
+    return this.findOne(id);
+  }
+
   async getActivePromotion(): Promise<Promotion> {
     const promotion = await this.prisma.promotion.findFirst({
       where: { status: PromotionStatus.ACTIVE },
@@ -289,7 +356,7 @@ export class PromotionsService {
       throw new NotFoundException('Aucune promotion active trouvée');
     }
 
-    return promotion;
+    return this.attachRegistrationOpen(promotion) as Promise<Promotion>;
   }
 
   async getActivePromotionReference() {
@@ -302,7 +369,7 @@ export class PromotionsService {
       throw new NotFoundException('Aucune promotion active trouvée');
     }
 
-    return promotion;
+    return this.attachRegistrationOpen(promotion);
   }
 
   async getStatistics(id: string) {

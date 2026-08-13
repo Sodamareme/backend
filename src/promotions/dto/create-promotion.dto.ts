@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsDateString, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsDateString, IsOptional, IsArray, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreatePromotionDto {
@@ -25,4 +25,14 @@ export class CreatePromotionDto {
     return value;
   })
   referentialIds?: string | string[];
+
+  @ApiPropertyOptional({ description: 'Indique si les inscriptions publiques sont ouvertes' })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  registrationOpen?: boolean;
 }

@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PendingStatus } from '@prisma/client';
+import { PendingStatus, Prisma, PromotionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePendingLearnerDto } from './dto/create-pending-learner.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -130,19 +130,38 @@ export class PendingLearnersService {
       throw new ConflictException('Un apprenant avec cet email ou ce telephone existe deja');
     }
 
-    const [promotion, referential] = await Promise.all([
-      this.prisma.promotion.findUnique({
-        where: { id: dto.promotionId },
-        select: { id: true, name: true },
-      }),
+    const [promotionRows, referential] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          name: string;
+          status: PromotionStatus;
+          registrationOpen: boolean;
+        }>
+      >(
+        Prisma.sql`SELECT id, name, status, "registrationOpen" FROM "Promotion" WHERE id = ${dto.promotionId} LIMIT 1`,
+      ),
       this.prisma.referential.findUnique({
         where: { id: dto.refId },
         select: { id: true, name: true },
       }),
     ]);
+    const promotion = promotionRows[0] ?? null;
 
     if (!promotion) {
       throw new NotFoundException('Promotion introuvable');
+    }
+
+    if (promotion.status !== PromotionStatus.ACTIVE) {
+      throw new BadRequestException(
+        "Les inscriptions ne sont pas ouvertes pour cette promotion.",
+      );
+    }
+
+    if (!promotion.registrationOpen) {
+      throw new BadRequestException(
+        "Les inscriptions sont fermées pour le moment.",
+      );
     }
 
     if (!referential) {

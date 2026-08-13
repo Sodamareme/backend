@@ -221,6 +221,7 @@ model Promotion {
   endDate      DateTime
   photoUrl     String?
   status       PromotionStatus @default(ACTIVE)
+  registrationOpen Boolean @default(true)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @default(now())
   events       Event[]
