@@ -227,11 +227,7 @@ export class AttendanceService {
       );
     const activeLearners = learners.filter((learner) =>
       this.isLearnerExpectedForAttendanceInRange(
-        {
-          ...learner,
-          attendanceStartDate:
-            learnerAttendanceStartDateMap.get(learner.id) ?? null,
-        },
+        learner,
         referentialAttendanceClosures,
         sessionAttendanceInfoMap,
         startDate,
@@ -407,7 +403,13 @@ export class AttendanceService {
           )
         : null;
 
-      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+      const shouldKeepHistoricalRecord =
+        record.isPresent || Boolean(record.scanTime);
+
+      if (
+        !shouldKeepHistoricalRecord &&
+        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)
+      ) {
         return;
       }
 
@@ -467,12 +469,18 @@ export class AttendanceService {
         return;
       }
 
-      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
-        (dayKey) => {
+      const learnerExpectedDays = new Set(
+        Array.from(cohortExpectedDays).filter((dayKey) => {
           const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
           return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
-        },
-      ).length;
+        }),
+      );
+
+      existingLearner.attendedDays.forEach((dayKey) => {
+        learnerExpectedDays.add(dayKey);
+      });
+
+      existingLearner.expectedDays = learnerExpectedDays.size;
     });
 
     const learnersWithStats = Array.from(learnersMap.values()).map(
