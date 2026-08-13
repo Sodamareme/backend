@@ -204,14 +204,16 @@ export class LearnersService {
               Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${normalizedCreateLearnerDto.refId}`,
             );
 
-            if (referentialClosureRows[0]?.attendanceClosedAt) {
+            const isSessionBasedReferential = referential.numberOfSessions > 1;
+
+            if (!isSessionBasedReferential && referentialClosureRows[0]?.attendanceClosedAt) {
               throw new BadRequestException(
                 'Les inscriptions sont fermées pour ce référentiel.',
               );
             }
 
             // ✅ Vérification sessions
-            if (referential.numberOfSessions > 1) {
+            if (isSessionBasedReferential) {
               if (!normalizedCreateLearnerDto.sessionId) {
                 throw new BadRequestException(
                   `Ce référentiel a plusieurs sessions. Veuillez spécifier un sessionId. Sessions disponibles: ${referential.sessions.map((s) => `${s.name} (${s.id})`).join(', ')}`,
@@ -501,20 +503,22 @@ export class LearnersService {
         Prisma.sql`SELECT "attendanceClosedAt" FROM "Referential" WHERE id = ${dto.refId}`,
       );
 
-      if (referentialClosureRows[0]?.attendanceClosedAt) {
+      const isSessionBasedReferential = Boolean(referential && referential.numberOfSessions > 1);
+
+      if (!isSessionBasedReferential && referentialClosureRows[0]?.attendanceClosedAt) {
         throw new BadRequestException(
           'Les inscriptions sont fermées pour ce référentiel.',
         );
       }
 
-      if (referential && referential.numberOfSessions > 1 && !dto.sessionId) {
+      if (isSessionBasedReferential && !dto.sessionId) {
         throw new BadRequestException(
           `Ce référentiel a plusieurs sessions. Veuillez spécifier un sessionId. ` +
           `Sessions disponibles: ${referential.sessions.map((s) => `${s.name} (id: ${s.id})`).join(', ')}`,
         );
       }
 
-      if (referential && referential.numberOfSessions > 1 && dto.sessionId) {
+      if (isSessionBasedReferential && dto.sessionId) {
         const session = referential.sessions.find((item) => item.id === dto.sessionId);
 
         if (!session) {
