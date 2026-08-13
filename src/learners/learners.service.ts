@@ -86,6 +86,41 @@ export class LearnersService {
     return blockedByPromotion.get(promotionId) ?? new Set<string>();
   }
 
+  private async getLearnerAttendanceStartDateMap(
+    learnerIds: string[],
+  ): Promise<Map<string, Date | null>> {
+    const uniqueLearnerIds = Array.from(new Set(learnerIds)).filter(Boolean);
+
+    if (uniqueLearnerIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: string; attendanceStartDate: Date | null }>
+      >(
+        Prisma.sql`SELECT id, "attendanceStartDate" FROM "Learner" WHERE id IN (${Prisma.join(uniqueLearnerIds)})`,
+      );
+
+      return new Map(
+        rows.map((row) => [
+          row.id,
+          row.attendanceStartDate
+            ? this.normalizeAttendanceBoundary(row.attendanceStartDate)
+            : null,
+        ]),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `attendanceStartDate indisponible sur Learner, fallback à null: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return new Map(uniqueLearnerIds.map((id) => [id, null]));
+    }
+  }
+
   private normalizeAttendanceBoundary(date: Date): Date {
     const normalizedDate = new Date(date);
     normalizedDate.setHours(0, 0, 0, 0);
@@ -96,15 +131,21 @@ export class LearnersService {
     id: string;
     status: LearnerStatus;
     createdAt?: Date | null;
+    attendanceStartDate?: Date | null;
   }): Promise<{
     startDate: Date | null;
     shouldCountAttendance: boolean;
   }> {
+    const explicitStartDate = learner.attendanceStartDate
+      ? this.normalizeAttendanceBoundary(learner.attendanceStartDate)
+      : null;
+
     if (learner.status !== LearnerStatus.REPLACEMENT) {
       return {
-        startDate: learner.createdAt
-          ? this.normalizeAttendanceBoundary(learner.createdAt)
-          : null,
+        startDate: this.getLatestAttendanceStartDate(
+          learner.createdAt,
+          explicitStartDate,
+        ),
         shouldCountAttendance: true,
       };
     }
@@ -133,8 +174,9 @@ export class LearnersService {
     }
 
     return {
-      startDate: this.normalizeAttendanceBoundary(
+      startDate: this.getLatestAttendanceStartDate(
         firstRealScan.scanTime ?? firstRealScan.date,
+        explicitStartDate,
       ),
       shouldCountAttendance: true,
     };
@@ -146,6 +188,18 @@ export class LearnersService {
     }
 
     return this.normalizeAttendanceBoundary(date).getTime() >= startDate.getTime();
+  }
+
+  private getLatestAttendanceStartDate(...dates: Array<Date | null | undefined>): Date | null {
+    const normalizedDates = dates
+      .filter((date): date is Date => Boolean(date))
+      .map((date) => this.normalizeAttendanceBoundary(date));
+
+    if (normalizedDates.length === 0) {
+      return null;
+    }
+
+    return new Date(Math.max(...normalizedDates.map((date) => date.getTime())));
   }
 
   // ==========================================
@@ -1504,6 +1558,7 @@ export class LearnersService {
         createdAt: true,
         promotionId: true,
         refId: true,
+        sessionId: true,
         statusHistory: {
           where: {
             newStatus: LearnerStatus.REPLACEMENT,
@@ -1523,12 +1578,22 @@ export class LearnersService {
       throw new NotFoundException('Apprenant non trouvé');
     }
 
-    const attendanceWindow = await this.getLearnerAttendanceWindow(learner);
+    const learnerAttendanceStartDateMap =
+      await this.getLearnerAttendanceStartDateMap([learner.id]);
+    const attendanceWindow = await this.getLearnerAttendanceWindow({
+      ...learner,
+      attendanceStartDate:
+        learnerAttendanceStartDateMap.get(learner.id) ?? null,
+    });
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
         promotionId: learner.promotionId,
-        ...(learner.refId ? { refId: learner.refId } : {}),
+        ...(learner.sessionId
+          ? { sessionId: learner.sessionId }
+          : learner.refId
+            ? { refId: learner.refId }
+            : {}),
         status: {
           in: ['ACTIVE', 'REPLACEMENT'],
         },
@@ -1791,12 +1856,22 @@ export class LearnersService {
       throw new NotFoundException(`Apprenant ${learnerId} introuvable`);
     }
 
-    const attendanceWindow = await this.getLearnerAttendanceWindow(learner);
+    const learnerAttendanceStartDateMap =
+      await this.getLearnerAttendanceStartDateMap([learner.id]);
+    const attendanceWindow = await this.getLearnerAttendanceWindow({
+      ...learner,
+      attendanceStartDate:
+        learnerAttendanceStartDateMap.get(learner.id) ?? null,
+    });
 
     const cohortLearners = await this.prisma.learner.findMany({
       where: {
         promotionId: learner.promotionId,
-        refId: learner.refId,
+        ...(learner.sessionId
+          ? { sessionId: learner.sessionId }
+          : learner.refId
+            ? { refId: learner.refId }
+            : {}),
         status: {
           in: [LearnerStatus.ACTIVE, LearnerStatus.REPLACEMENT],
         },
@@ -1840,7 +1915,16 @@ export class LearnersService {
       if (
         record.learnerId !== learnerId ||
         !attendanceWindow.shouldCountAttendance ||
-        !this.isInstructionDay(record.date) ||
+        !this.isInstructionDay(record.date)
+      ) {
+        continue;
+      }
+
+      const shouldKeepHistoricalRecord =
+        record.isPresent || Boolean(record.scanTime);
+
+      if (
+        !shouldKeepHistoricalRecord &&
         !this.isAttendanceOnOrAfterStart(record.date, attendanceWindow.startDate)
       ) {
         continue;

@@ -221,9 +221,17 @@ export class AttendanceService {
         endDate,
         "attendance",
       );
+    const learnerAttendanceStartDateMap =
+      await this.getLearnerAttendanceStartDateMap(
+        learners.map((learner) => learner.id),
+      );
     const activeLearners = learners.filter((learner) =>
       this.isLearnerExpectedForAttendanceInRange(
-        learner,
+        {
+          ...learner,
+          attendanceStartDate:
+            learnerAttendanceStartDateMap.get(learner.id) ?? null,
+        },
         referentialAttendanceClosures,
         sessionAttendanceInfoMap,
         startDate,
@@ -389,7 +397,11 @@ export class AttendanceService {
       );
       const learnerStartDate = learnerData
         ? this.getLearnerAnalyticsStartDate(
-            learnerData,
+            {
+              ...learnerData,
+              attendanceStartDate:
+                learnerAttendanceStartDateMap.get(learnerData.id) ?? null,
+            },
             replacementStartDates.get(record.learnerId) ?? null,
             sessionAttendanceInfoMap,
           )
@@ -441,7 +453,11 @@ export class AttendanceService {
       }
 
       const learnerStartDate = this.getLearnerAnalyticsStartDate(
-        learner,
+        {
+          ...learner,
+          attendanceStartDate:
+            learnerAttendanceStartDateMap.get(learner.id) ?? null,
+        },
         replacementStartDates.get(learner.id) ?? null,
         sessionAttendanceInfoMap,
       );
@@ -574,17 +590,76 @@ export class AttendanceService {
     );
   }
 
+  private getLatestAttendanceStartDate(
+    ...dates: Array<Date | null | undefined>
+  ): Date | null {
+    const normalizedDates = dates
+      .filter((date): date is Date => Boolean(date))
+      .map((date) => this.normalizeAttendanceBoundary(date));
+
+    if (normalizedDates.length === 0) {
+      return null;
+    }
+
+    return new Date(
+      Math.max(...normalizedDates.map((date) => date.getTime())),
+    );
+  }
+
+  private async getLearnerAttendanceStartDateMap(
+    learnerIds: string[],
+  ): Promise<Map<string, Date | null>> {
+    const uniqueLearnerIds = Array.from(new Set(learnerIds)).filter(Boolean);
+
+    if (uniqueLearnerIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: string; attendanceStartDate: Date | null }>
+      >(
+        Prisma.sql`SELECT id, "attendanceStartDate" FROM "Learner" WHERE id IN (${Prisma.join(uniqueLearnerIds)})`,
+      );
+
+      return new Map(
+        rows.map((row) => [
+          row.id,
+          row.attendanceStartDate
+            ? this.normalizeAttendanceBoundary(row.attendanceStartDate)
+            : null,
+        ]),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `attendanceStartDate indisponible sur Learner, fallback à null: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return new Map(uniqueLearnerIds.map((id) => [id, null]));
+    }
+  }
+
   private getLearnerAnalyticsStartDate(
     learner: {
       createdAt?: Date | null;
+      attendanceStartDate?: Date | null;
       status: LearnerStatus;
       sessionId?: string | null;
     },
     replacementStartDate?: Date | null,
     sessionAttendanceInfoMap?: Map<string, AttendanceSessionInfo>,
   ): Date | null {
+    const explicitStartDate = learner.attendanceStartDate
+      ? this.normalizeAttendanceBoundary(learner.attendanceStartDate)
+      : null;
+
     if (learner.status === LearnerStatus.REPLACEMENT) {
-      return replacementStartDate ?? null;
+      return this.getLatestAttendanceStartDate(
+        replacementStartDate,
+        explicitStartDate,
+      );
     }
 
     const sessionInfo = learner.sessionId
@@ -592,14 +667,20 @@ export class AttendanceService {
       : null;
 
     if (sessionInfo?.startDate) {
-      return this.normalizeAttendanceBoundary(sessionInfo.startDate);
+      return this.getLatestAttendanceStartDate(
+        sessionInfo.startDate,
+        explicitStartDate,
+      );
     }
 
     if (!learner.createdAt) {
-      return null;
+      return explicitStartDate;
     }
 
-    return this.normalizeAttendanceBoundary(learner.createdAt);
+    return this.getLatestAttendanceStartDate(
+      learner.createdAt,
+      explicitStartDate,
+    );
   }
 
   private async getReferentialAttendanceClosures(
@@ -780,6 +861,7 @@ export class AttendanceService {
       refId?: string | null;
       sessionId?: string | null;
       promotionId?: string | null;
+      attendanceStartDate?: Date | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
     sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
@@ -788,11 +870,21 @@ export class AttendanceService {
   ): boolean {
     const normalizedTargetDate = this.normalizeAttendanceBoundary(targetDate);
     const targetDayKey = this.getAttendanceDayKey(normalizedTargetDate);
+    const explicitStartDate = learner.attendanceStartDate
+      ? this.normalizeAttendanceBoundary(learner.attendanceStartDate)
+      : null;
     const closureState = this.getLearnerAttendanceClosureState(
       learner,
       referentialAttendanceClosures,
       sessionAttendanceInfoMap,
     );
+
+    if (
+      explicitStartDate &&
+      normalizedTargetDate.getTime() < explicitStartDate.getTime()
+    ) {
+      return false;
+    }
 
     if (
       closureState.normalizedSessionStartDate &&
@@ -845,6 +937,7 @@ export class AttendanceService {
       refId?: string | null;
       sessionId?: string | null;
       promotionId?: string | null;
+      attendanceStartDate?: Date | null;
     },
     referentialAttendanceClosures: Map<string, Date | null>,
     sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
@@ -853,11 +946,21 @@ export class AttendanceService {
   ): boolean {
     const normalizedStartDate = this.normalizeAttendanceBoundary(startDate);
     const normalizedEndDate = this.normalizeAttendanceBoundary(endDate);
+    const explicitStartDate = learner.attendanceStartDate
+      ? this.normalizeAttendanceBoundary(learner.attendanceStartDate)
+      : null;
     const closureState = this.getLearnerAttendanceClosureState(
       learner,
       referentialAttendanceClosures,
       sessionAttendanceInfoMap,
     );
+
+    if (
+      explicitStartDate &&
+      normalizedEndDate.getTime() < explicitStartDate.getTime()
+    ) {
+      return false;
+    }
 
     if (
       closureState.normalizedSessionStartDate &&
@@ -1755,10 +1858,18 @@ export class AttendanceService {
           targetDate,
           "attendance",
         );
+      const learnerAttendanceStartDateMap =
+        await this.getLearnerAttendanceStartDateMap(
+          learners.map((learner) => learner.id),
+        );
 
       const expectedLearners = learners.filter((learner) =>
         this.isLearnerExpectedForAttendanceOnDate(
-          learner,
+          {
+            ...learner,
+            attendanceStartDate:
+              learnerAttendanceStartDateMap.get(learner.id) ?? null,
+          },
           referentialAttendanceClosures,
           sessionAttendanceInfoMap,
           targetDate,
@@ -1892,10 +2003,18 @@ export class AttendanceService {
           targetDate,
           "attendance",
         );
+      const learnerAttendanceStartDateMap =
+        await this.getLearnerAttendanceStartDateMap(
+          allLearners.map((learner) => learner.id),
+        );
 
       const expectedLearners = allLearners.filter((learner) =>
         this.isLearnerExpectedForAttendanceOnDate(
-          learner,
+          {
+            ...learner,
+            attendanceStartDate:
+              learnerAttendanceStartDateMap.get(learner.id) ?? null,
+          },
           referentialAttendanceClosures,
           sessionAttendanceInfoMap,
           targetDate,
@@ -2491,13 +2610,19 @@ export class AttendanceService {
           );
         }
       });
+      const learnerAttendanceStartDateMap =
+        await this.getLearnerAttendanceStartDateMap(learnerIds);
 
       const learnerStartDates = new Map<string, Date | null>();
       promotion.learners.forEach((learner) => {
         learnerStartDates.set(
           learner.id,
           this.getLearnerAnalyticsStartDate(
-            learner,
+            {
+              ...learner,
+              attendanceStartDate:
+                learnerAttendanceStartDateMap.get(learner.id) ?? null,
+            },
             replacementStartDates.get(learner.id) ?? null,
             sessionAttendanceInfoMap,
           ),
@@ -2577,7 +2702,11 @@ export class AttendanceService {
           const learnerStartDate = learnerStartDates.get(learner.id) ?? null;
           return (
             this.isLearnerExpectedForAttendanceOnDate(
-              learner,
+              {
+                ...learner,
+                attendanceStartDate:
+                  learnerAttendanceStartDateMap.get(learner.id) ?? null,
+              },
               referentialAttendanceClosures,
               sessionAttendanceInfoMap,
               attendanceDate,
@@ -2763,12 +2892,32 @@ export class AttendanceService {
     const learnerDates = new Set(
       learnerRecords.map((record) => record.date.toISOString().split("T")[0]),
     );
+    const learnerAttendanceStartDateMap =
+      await this.getLearnerAttendanceStartDateMap([learner.id]);
+    const learnerGeneratedAbsenceStartDate = this.getLearnerAnalyticsStartDate(
+      {
+        ...learner,
+        attendanceStartDate:
+          learnerAttendanceStartDateMap.get(learner.id) ?? null,
+      },
+      null,
+      new Map(),
+    );
 
     const expectedDates = Array.from(
       new Set(
         cohortAttendanceRecords
           .map((record) => record.date.toISOString().split("T")[0])
-          .filter((dateKey) => !learnerBlockedDays.has(dateKey)),
+          .filter((dateKey) => {
+            if (learnerBlockedDays.has(dateKey)) {
+              return false;
+            }
+
+            return this.isAttendanceOnOrAfterStart(
+              new Date(`${dateKey}T00:00:00.000Z`),
+              learnerGeneratedAbsenceStartDate,
+            );
+          }),
       ),
     );
 
