@@ -206,6 +206,8 @@ export class AttendanceService {
     );
     const sessionAttendanceInfoMap =
       await this.getSessionAttendanceInfoMap(sessionIds);
+    const sessionFirstRealScanDateMap =
+      await this.getSessionFirstRealScanDateMap(sessionIds);
     const learnerPromotionIds = new Map(
       learners.map((learner) => [learner.id, learner.promotionId ?? null]),
     );
@@ -321,6 +323,7 @@ export class AttendanceService {
         presentCount: number;
         totalRecords: number;
         expectedDays: number;
+        countedDays: Set<string>;
         attendedDays: Set<string>;
         attendanceRate: number;
       }
@@ -344,6 +347,7 @@ export class AttendanceService {
           presentCount: 0,
           totalRecords: 0,
           expectedDays: 0,
+          countedDays: new Set<string>(),
           attendedDays: new Set<string>(),
           attendanceRate: 0,
         },
@@ -395,7 +399,7 @@ export class AttendanceService {
         (learner) => learner.id === record.learnerId,
       );
       const learnerStartDate = learnerData
-        ? this.getLearnerAnalyticsStartDate(
+        ? this.getLearnerLeaderboardStartDate(
             {
               ...learnerData,
               attendanceStartDate:
@@ -403,10 +407,19 @@ export class AttendanceService {
             },
             replacementStartDates.get(record.learnerId) ?? null,
             sessionAttendanceInfoMap,
+            sessionFirstRealScanDateMap,
           )
         : null;
+      const isHistoricalRealRecord =
+        learnerData &&
+        learnerStartDate &&
+        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate) &&
+        (record.isPresent || record.isLate || Boolean(record.scanTime));
 
-      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
+      if (
+        !isHistoricalRealRecord &&
+        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)
+      ) {
         return;
       }
 
@@ -434,6 +447,7 @@ export class AttendanceService {
       existingLearner.totalRecords += 1;
 
       const dateKey = this.getAttendanceDayKey(record.date);
+      existingLearner.countedDays.add(dateKey);
 
       if (record.isPresent) {
         existingLearner.attendedDays.add(dateKey);
@@ -451,7 +465,7 @@ export class AttendanceService {
         return;
       }
 
-      const learnerStartDate = this.getLearnerAnalyticsStartDate(
+      const learnerStartDate = this.getLearnerLeaderboardStartDate(
         {
           ...learner,
           attendanceStartDate:
@@ -459,6 +473,7 @@ export class AttendanceService {
         },
         replacementStartDates.get(learner.id) ?? null,
         sessionAttendanceInfoMap,
+        sessionFirstRealScanDateMap,
       );
 
       if (!learnerStartDate) {
@@ -466,12 +481,21 @@ export class AttendanceService {
         return;
       }
 
-      existingLearner.expectedDays = Array.from(cohortExpectedDays).filter(
-        (dayKey) => {
+      const expectedDays = new Set(
+        Array.from(cohortExpectedDays).filter((dayKey) => {
           const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
           return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
-        },
-      ).length;
+        }),
+      );
+
+      existingLearner.countedDays.forEach((dayKey) => {
+        const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
+        if (!this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate)) {
+          expectedDays.add(dayKey);
+        }
+      });
+
+      existingLearner.expectedDays = expectedDays.size;
     });
 
     const learnersWithStats = Array.from(learnersMap.values()).map(
@@ -684,6 +708,49 @@ export class AttendanceService {
     );
   }
 
+  private getLearnerLeaderboardStartDate(
+    learner: {
+      createdAt?: Date | null;
+      attendanceStartDate?: Date | null;
+      status: LearnerStatus;
+      sessionId?: string | null;
+    },
+    replacementStartDate: Date | null | undefined,
+    sessionAttendanceInfoMap: Map<string, AttendanceSessionInfo>,
+    sessionFirstRealScanDateMap: Map<string, Date | null>,
+  ): Date | null {
+    const explicitStartDate = learner.attendanceStartDate
+      ? this.normalizeAttendanceBoundary(learner.attendanceStartDate)
+      : null;
+
+    if (learner.status === LearnerStatus.REPLACEMENT) {
+      return this.getLatestAttendanceStartDate(
+        replacementStartDate,
+        explicitStartDate,
+      );
+    }
+
+    if (learner.sessionId) {
+      const sessionFirstRealScanDate =
+        sessionFirstRealScanDateMap.get(learner.sessionId) ?? null;
+
+      if (sessionFirstRealScanDate) {
+        return this.getLatestAttendanceStartDate(
+          sessionFirstRealScanDate,
+          explicitStartDate,
+        );
+      }
+
+      return explicitStartDate;
+    }
+
+    return this.getLearnerAnalyticsStartDate(
+      learner,
+      replacementStartDate,
+      sessionAttendanceInfoMap,
+    );
+  }
+
   private async getReferentialAttendanceClosures(
     referentialIds: string[],
   ): Promise<Map<string, Date | null>> {
@@ -756,6 +823,56 @@ export class AttendanceService {
           },
         ]),
       );
+    }
+  }
+
+  private async getSessionFirstRealScanDateMap(
+    sessionIds: string[],
+  ): Promise<Map<string, Date | null>> {
+    const uniqueSessionIds = Array.from(new Set(sessionIds));
+
+    if (uniqueSessionIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ sessionId: string; firstScanAt: Date | null }>
+      >(
+        Prisma.sql`
+          SELECT
+            l."sessionId" AS "sessionId",
+            MIN(COALESCE(la."scanTime", la."date")) AS "firstScanAt"
+          FROM "LearnerAttendance" la
+          JOIN "Learner" l ON l.id = la."learnerId"
+          LEFT JOIN "Session" s ON s.id = l."sessionId"
+          WHERE l."sessionId" IN (${Prisma.join(uniqueSessionIds)})
+            AND la."scanTime" IS NOT NULL
+            AND (s."startDate" IS NULL OR la."date" >= s."startDate")
+          GROUP BY l."sessionId"
+        `,
+      );
+
+      return new Map(
+        uniqueSessionIds.map((sessionId) => {
+          const row = rows.find((item) => item.sessionId === sessionId);
+
+          return [
+            sessionId,
+            row?.firstScanAt
+              ? this.normalizeAttendanceBoundary(row.firstScanAt)
+              : null,
+          ];
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Premier scan reel indisponible sur Session, fallback à null: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      return new Map(uniqueSessionIds.map((id) => [id, null]));
     }
   }
 
