@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { AbsenceStatus, Gender, Learner, LearnerStatus, Prisma, PrismaClient } from '@prisma/client';
+import { AbsenceStatus, Gender, Learner, LearnerStatus, Prisma, PrismaClient, UserRole } from '@prisma/client';
 import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import { AuthUtils } from '../utils/auth.utils';
@@ -19,6 +19,13 @@ import { normalizeEmail, normalizeEmailOrUndefined } from '../utils/email.utils'
 @Injectable()
 export class LearnersService {
   private readonly logger = new Logger(LearnersService.name);
+  private readonly safeUserSelect = {
+    id: true,
+    email: true,
+    role: true,
+    createdAt: true,
+    updatedAt: true,
+  } satisfies Prisma.UserSelect;
 
   constructor(
     private prisma: PrismaService,
@@ -441,7 +448,7 @@ export class LearnersService {
                 : undefined,
             },
             include: {
-              user: true,
+              user: { select: this.safeUserSelect },
               promotion: true,
               referential: true,
               tutor: true,
@@ -868,7 +875,7 @@ export class LearnersService {
               : undefined,
           },
           include: {
-            user: true,
+            user: { select: this.safeUserSelect },
             promotion: true,
             referential: true,
             tutor: true,
@@ -1163,12 +1170,53 @@ export class LearnersService {
     }
   }
 
-  async findAll(): Promise<Learner[]> {
+  async findAll(currentUser?: { id?: string; role?: UserRole | string }) {
+    const where: Prisma.LearnerWhereInput = {};
+
+    if (currentUser?.role === UserRole.COACH && currentUser.id) {
+      const coach = await this.prisma.coach.findUnique({
+        where: { userId: currentUser.id },
+        select: {
+          referentials: {
+            select: { id: true },
+          },
+        },
+      });
+
+      const referentialIds = coach?.referentials.map((referential) => referential.id) ?? [];
+
+      if (referentialIds.length === 0) {
+        return [];
+      }
+
+      where.refId = { in: referentialIds };
+    }
+
     return this.prisma.learner.findMany({
-      include: {
-        user: true,
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        address: true,
+        gender: true,
+        birthDate: true,
+        birthPlace: true,
+        phone: true,
+        photoUrl: true,
+        status: true,
+        qrCode: true,
+        userId: true,
+        refId: true,
+        promotionId: true,
+        createdAt: true,
+        updatedAt: true,
+        matricule: true,
+        sessionId: true,
+        user: { select: this.safeUserSelect },
         referential: true,
         promotion: true,
+        session: true,
         tutor: true,
         kit: true,
         attendances: true,
@@ -1262,7 +1310,7 @@ export class LearnersService {
     const learner = await this.prisma.learner.findUnique({
       where: { id },
       include: {
-        user: true,
+        user: { select: this.safeUserSelect },
         referential: true,
         promotion: true,
         tutor: true,
@@ -1481,7 +1529,7 @@ export class LearnersService {
       where: { id },
       data: normalizedData,
       include: {
-        user: true,
+        user: { select: this.safeUserSelect },
         referential: true,
         promotion: true,
         tutor: true,
@@ -1497,7 +1545,7 @@ export class LearnersService {
       where: { id },
       data: { status },
       include: {
-        user: true,
+        user: { select: this.safeUserSelect },
         referential: true,
         promotion: true,
       },
@@ -1703,7 +1751,7 @@ export class LearnersService {
         where: { id: learnerId },
         data: { status: updateStatusDto.status },
         include: {
-          user: true,
+          user: { select: this.safeUserSelect },
           promotion: true,
           referential: true,
           statusHistory: true,
@@ -1791,7 +1839,7 @@ export class LearnersService {
           ...(promotionId && { promotionId }),
         },
         include: {
-          user: true,
+          user: { select: this.safeUserSelect },
           promotion: true,
           referential: { include: { sessions: true } },
         },

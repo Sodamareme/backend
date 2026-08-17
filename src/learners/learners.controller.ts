@@ -275,10 +275,10 @@ export class LearnersController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT, UserRole.VIGIL, UserRole.RESTAURATEUR)
+  @Roles(UserRole.ADMIN, UserRole.COACH, UserRole.SURVEILLANT)
   @ApiOperation({ summary: 'Récupérer tous les apprenants' })
-  async findAll() {
-    return this.learnersService.findAll();
+  async findAll(@Request() req) {
+    return this.learnersService.findAll(req.user);
   }
 
   @Get('reference-list')
