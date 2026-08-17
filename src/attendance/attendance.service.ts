@@ -502,6 +502,7 @@ export class AttendanceService {
           lateCount: learner.lateCount,
           presentCount: learner.presentCount,
           totalRecords: learner.totalRecords,
+          expectedDays: learner.expectedDays,
           attendanceRate,
         };
       },
@@ -528,7 +529,7 @@ export class AttendanceService {
       .slice(0, limit);
 
     const sortedMostRegular = this.sortMostRegular(learnersWithStats).filter(
-      (learner) => learner.presentCount > 0,
+      (learner) => learner.expectedDays > 0,
     );
 
     return {
