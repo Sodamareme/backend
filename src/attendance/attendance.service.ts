@@ -849,6 +849,7 @@ export class AttendanceService {
           WHERE l."sessionId" IN (${Prisma.join(uniqueSessionIds)})
             AND la."scanTime" IS NOT NULL
             AND (s."startDate" IS NULL OR la."date" >= s."startDate")
+            AND (l."attendanceStartDate" IS NULL OR la."date" >= l."attendanceStartDate")
           GROUP BY l."sessionId"
         `,
       );
