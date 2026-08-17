@@ -323,7 +323,6 @@ export class AttendanceService {
         presentCount: number;
         totalRecords: number;
         expectedDays: number;
-        countedDays: Set<string>;
         attendedDays: Set<string>;
         attendanceRate: number;
       }
@@ -347,7 +346,6 @@ export class AttendanceService {
           presentCount: 0,
           totalRecords: 0,
           expectedDays: 0,
-          countedDays: new Set<string>(),
           attendedDays: new Set<string>(),
           attendanceRate: 0,
         },
@@ -410,16 +408,8 @@ export class AttendanceService {
             sessionFirstRealScanDateMap,
           )
         : null;
-      const isHistoricalRealRecord =
-        learnerData &&
-        learnerStartDate &&
-        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate) &&
-        (record.isPresent || record.isLate || Boolean(record.scanTime));
 
-      if (
-        !isHistoricalRealRecord &&
-        !this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)
-      ) {
+      if (!this.isAttendanceOnOrAfterStart(record.date, learnerStartDate)) {
         return;
       }
 
@@ -447,7 +437,6 @@ export class AttendanceService {
       existingLearner.totalRecords += 1;
 
       const dateKey = this.getAttendanceDayKey(record.date);
-      existingLearner.countedDays.add(dateKey);
 
       if (record.isPresent) {
         existingLearner.attendedDays.add(dateKey);
@@ -487,13 +476,6 @@ export class AttendanceService {
           return this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate);
         }),
       );
-
-      existingLearner.countedDays.forEach((dayKey) => {
-        const dayDate = new Date(`${dayKey}T00:00:00.000Z`);
-        if (!this.isAttendanceOnOrAfterStart(dayDate, learnerStartDate)) {
-          expectedDays.add(dayKey);
-        }
-      });
 
       existingLearner.expectedDays = expectedDays.size;
     });
