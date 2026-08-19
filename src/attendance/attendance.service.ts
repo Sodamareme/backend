@@ -115,19 +115,76 @@ export class AttendanceService {
 
   private sortMostRegular<
     T extends {
+      firstName: string;
+      lastName: string;
       attendanceRate: number;
       presentCount: number;
       lateCount: number;
       absenceCount: number;
+      averageScanTimeMinutes?: number | null;
     },
   >(rows: T[]): T[] {
     return [...rows].sort(
       (a, b) =>
         a.absenceCount - b.absenceCount ||
         a.lateCount - b.lateCount ||
+        b.attendanceRate - a.attendanceRate ||
         b.presentCount - a.presentCount ||
-        b.attendanceRate - a.attendanceRate,
+        this.compareAverageScanTime(
+          a.averageScanTimeMinutes,
+          b.averageScanTimeMinutes,
+        ) ||
+        a.lastName.localeCompare(b.lastName, "fr", { sensitivity: "base" }) ||
+        a.firstName.localeCompare(b.firstName, "fr", { sensitivity: "base" }),
     );
+  }
+
+  private compareAverageScanTime(
+    a?: number | null,
+    b?: number | null,
+  ): number {
+    const hasA = typeof a === "number" && Number.isFinite(a);
+    const hasB = typeof b === "number" && Number.isFinite(b);
+
+    if (hasA && hasB) {
+      return a - b;
+    }
+
+    if (hasA) {
+      return -1;
+    }
+
+    if (hasB) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  private getScanTimeMinutes(scanTime?: Date | null): number | null {
+    if (!scanTime) {
+      return null;
+    }
+
+    return (
+      scanTime.getUTCHours() * 60 +
+      scanTime.getUTCMinutes() +
+      scanTime.getUTCSeconds() / 60
+    );
+  }
+
+  private formatAverageScanTime(minutes?: number | null): string | null {
+    if (typeof minutes !== "number" || !Number.isFinite(minutes)) {
+      return null;
+    }
+
+    const roundedMinutes = Math.max(0, Math.min(1439, Math.round(minutes)));
+    const hours = Math.floor(roundedMinutes / 60);
+    const remainingMinutes = roundedMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(
+      remainingMinutes,
+    ).padStart(2, "0")}`;
   }
 
   private getPromotionScopeWhere(promotionId?: string | null): Prisma.LearnerWhereInput {
@@ -324,6 +381,8 @@ export class AttendanceService {
         totalRecords: number;
         expectedDays: number;
         attendedDays: Set<string>;
+        scanTimeMinutesTotal: number;
+        scanTimeCount: number;
         attendanceRate: number;
       }
     >(
@@ -347,6 +406,8 @@ export class AttendanceService {
           totalRecords: 0,
           expectedDays: 0,
           attendedDays: new Set<string>(),
+          scanTimeMinutesTotal: 0,
+          scanTimeCount: 0,
           attendanceRate: 0,
         },
       ]),
@@ -441,6 +502,12 @@ export class AttendanceService {
       if (record.isPresent) {
         existingLearner.attendedDays.add(dateKey);
         existingLearner.presentCount += 1;
+
+        const scanTimeMinutes = this.getScanTimeMinutes(record.scanTime);
+        if (scanTimeMinutes !== null) {
+          existingLearner.scanTimeMinutesTotal += scanTimeMinutes;
+          existingLearner.scanTimeCount += 1;
+        }
       }
 
       if (record.isLate) {
@@ -495,6 +562,14 @@ export class AttendanceService {
                 ).toFixed(2),
               )
             : 0;
+        const averageScanTimeMinutes =
+          learner.scanTimeCount > 0
+            ? Number(
+                (
+                  learner.scanTimeMinutesTotal / learner.scanTimeCount
+                ).toFixed(2),
+              )
+            : null;
 
         return {
           learnerId: learner.learnerId,
@@ -510,6 +585,8 @@ export class AttendanceService {
           totalRecords: learner.totalRecords,
           expectedDays: learner.expectedDays,
           attendanceRate,
+          averageScanTimeMinutes,
+          averageScanTime: this.formatAverageScanTime(averageScanTimeMinutes),
         };
       },
     );
