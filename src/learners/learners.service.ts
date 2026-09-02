@@ -1471,8 +1471,19 @@ export class LearnersService {
     };
   }
 
-  async update(id: string, data: Partial<Learner>): Promise<Learner> {
-    await this.findOne(id);
+  async update(
+    id: string,
+    data: Partial<Learner> & {
+      tutor?: Partial<{
+        firstName: string;
+        lastName: string;
+        phone: string;
+        email: string | null;
+        address: string | null;
+      }>;
+    },
+  ): Promise<Learner> {
+    const learner = await this.findOne(id);
 
     const normalizedData: Prisma.LearnerUpdateInput = {};
 
@@ -1525,6 +1536,87 @@ export class LearnersService {
       normalizedData.birthDate = birthDate;
     }
 
+    if (data.tutor && typeof data.tutor === 'object') {
+      const tutorUpdateData: {
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        email?: string | null;
+        address?: string | null;
+      } = {};
+
+      if (typeof data.tutor.firstName === 'string') {
+        const firstName = data.tutor.firstName.trim();
+        if (!firstName) {
+          throw new BadRequestException('Le prénom du tuteur ne peut pas être vide');
+        }
+        tutorUpdateData.firstName = firstName;
+      }
+
+      if (typeof data.tutor.lastName === 'string') {
+        const lastName = data.tutor.lastName.trim();
+        if (!lastName) {
+          throw new BadRequestException('Le nom du tuteur ne peut pas être vide');
+        }
+        tutorUpdateData.lastName = lastName;
+      }
+
+      if (typeof data.tutor.phone === 'string') {
+        const phone = data.tutor.phone.trim();
+        if (!phone) {
+          throw new BadRequestException('Le téléphone du tuteur ne peut pas être vide');
+        }
+        tutorUpdateData.phone = phone;
+      }
+
+      if (data.tutor.email !== undefined) {
+        tutorUpdateData.email =
+          typeof data.tutor.email === 'string'
+            ? normalizeEmailOrUndefined(data.tutor.email) ?? null
+            : null;
+      }
+
+      if (data.tutor.address !== undefined) {
+        tutorUpdateData.address =
+          typeof data.tutor.address === 'string' ? data.tutor.address.trim() || null : null;
+      }
+
+      const hasTutorUpdates = Object.keys(tutorUpdateData).length > 0;
+      const currentTutor = (learner as Learner & {
+        tutor?: {
+          firstName: string;
+          lastName: string;
+          phone: string;
+          email?: string | null;
+          address?: string | null;
+        } | null;
+      }).tutor;
+
+      if (hasTutorUpdates) {
+        if (currentTutor) {
+          normalizedData.tutor = { update: tutorUpdateData };
+        } else {
+          const firstName = tutorUpdateData.firstName;
+          const lastName = tutorUpdateData.lastName;
+          const phone = tutorUpdateData.phone;
+
+          if (!firstName || !lastName || !phone) {
+            throw new BadRequestException('Le prénom, le nom et le téléphone du tuteur sont requis');
+          }
+
+          normalizedData.tutor = {
+            create: {
+              firstName,
+              lastName,
+              phone,
+              email: tutorUpdateData.email ?? null,
+              address: tutorUpdateData.address ?? null,
+            },
+          };
+        }
+      }
+    }
+
     return this.prisma.learner.update({
       where: { id },
       data: normalizedData,
@@ -1556,12 +1648,32 @@ export class LearnersService {
     id: string,
     kitData: { laptop?: boolean; charger?: boolean; bag?: boolean; polo?: boolean },
   ): Promise<Learner> {
-    await this.findOne(id);
+    const learner = await this.findOne(id);
+
+    const normalizedKitData = {
+      laptop: kitData.laptop ?? Boolean((learner as Learner & { kit?: { laptop?: boolean } | null }).kit?.laptop),
+      charger: kitData.charger ?? Boolean((learner as Learner & { kit?: { charger?: boolean } | null }).kit?.charger),
+      bag: kitData.bag ?? Boolean((learner as Learner & { kit?: { bag?: boolean } | null }).kit?.bag),
+      polo: kitData.polo ?? Boolean((learner as Learner & { kit?: { polo?: boolean } | null }).kit?.polo),
+    };
 
     return this.prisma.learner.update({
       where: { id },
-      data: { kit: { update: kitData } },
-      include: { kit: true },
+      data: {
+        kit: {
+          upsert: {
+            create: normalizedKitData,
+            update: normalizedKitData,
+          },
+        },
+      },
+      include: {
+        user: { select: this.safeUserSelect },
+        referential: true,
+        promotion: true,
+        tutor: true,
+        kit: true,
+      },
     });
   }
 
