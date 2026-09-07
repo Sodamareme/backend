@@ -9,6 +9,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { Cron } from "@nestjs/schedule";
 import {
   AbsenceStatus,
+  Learner,
   LearnerAttendance,
   LearnerStatus,
   PromotionStatus,
@@ -1374,6 +1375,85 @@ export class AttendanceService {
     return scanTime <= cutoffTime;
   }
 
+  private async saveLearnerScan(
+    learner: Learner & {
+      referential: { name: string } | null;
+      promotion: { name: string };
+    },
+    now: Date,
+    today: Date,
+    isLate: boolean,
+  ): Promise<LearnerScanResponse> {
+    const existingScannedAttendance =
+      await this.prisma.learnerAttendance.findFirst({
+        where: {
+          learnerId: learner.id,
+          date: today,
+          scanTime: {
+            not: null,
+          },
+        },
+        orderBy: {
+          scanTime: "asc",
+        },
+      });
+
+    if (existingScannedAttendance) {
+      throw new ConflictException(
+        `${learner.firstName} ${learner.lastName} a déjà été scanné aujourd'hui à ${existingScannedAttendance.scanTime?.toLocaleTimeString() || "heure inconnue"}`,
+      );
+    }
+
+    const existingAttendance = await this.prisma.learnerAttendance.findFirst({
+      where: {
+        learnerId: learner.id,
+        date: today,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    const attendanceData = {
+      date: today,
+      isPresent: true,
+      scanTime: now,
+      isLate,
+      status: isLate ? AbsenceStatus.TO_JUSTIFY : AbsenceStatus.PENDING,
+      justification: null,
+      documentUrl: null,
+      justificationComment: null,
+    };
+
+    const attendance = existingAttendance
+      ? await this.prisma.learnerAttendance.update({
+          where: { id: existingAttendance.id },
+          data: attendanceData,
+        })
+      : await this.prisma.learnerAttendance.create({
+          data: {
+            ...attendanceData,
+            learnerId: learner.id,
+          },
+        });
+
+    return {
+      type: "LEARNER",
+      scanTime: attendance.scanTime!,
+      attendanceStatus: isLate ? "LATE" : "PRESENT",
+      isAlreadyScanned: false,
+      learner: {
+        id: learner.id,
+        matricule: learner.matricule,
+        firstName: learner.firstName,
+        lastName: learner.lastName,
+        photoUrl: learner.photoUrl,
+        referential: learner.referential,
+        promotion: learner.promotion,
+      },
+    };
+  }
+
   // 🔧 OPTIMISÉ : Scan unique et rapide
   async scan(
     matricule: string,
@@ -1426,41 +1506,7 @@ export class AttendanceService {
         throw new BadRequestException(attendanceBlockReason);
       }
 
-      // Vérifier si déjà scanné
-      if (learner.attendances && learner.attendances.length > 0) {
-        const existingAttendance = learner.attendances[0];
-        throw new ConflictException(
-          `${learner.firstName} ${learner.lastName} a déjà été scanné aujourd'hui à ${existingAttendance.scanTime?.toLocaleTimeString() || "heure inconnue"}`,
-        );
-      }
-
-      // Créer l'attendance
-      const attendance = await this.prisma.learnerAttendance.create({
-        data: {
-          date: today,
-          isPresent: true,
-          scanTime: now,
-          isLate,
-          learnerId: learner.id,
-          status: isLate ? "TO_JUSTIFY" : "PENDING",
-        },
-      });
-
-      return {
-        type: "LEARNER",
-        scanTime: attendance.scanTime,
-        attendanceStatus: isLate ? "LATE" : "PRESENT",
-        isAlreadyScanned: false,
-        learner: {
-          id: learner.id,
-          matricule: learner.matricule,
-          firstName: learner.firstName,
-          lastName: learner.lastName,
-          photoUrl: learner.photoUrl,
-          referential: learner.referential,
-          promotion: learner.promotion,
-        },
-      };
+      return this.saveLearnerScan(learner, now, today, isLate);
     }
 
     // 3. Traiter le coach s'il existe
@@ -1576,46 +1622,8 @@ export class AttendanceService {
       throw new BadRequestException(attendanceBlockReason);
     }
 
-    const existingAttendance = await this.prisma.learnerAttendance.findFirst({
-      where: {
-        learnerId: learner.id,
-        date: today,
-      },
-    });
-
-    if (existingAttendance) {
-      throw new ConflictException(
-        `${learner.firstName} ${learner.lastName} a déjà été scanné aujourd'hui à ${existingAttendance.scanTime?.toLocaleTimeString() || "heure inconnue"}`,
-      );
-    }
-
     const isLate = !this.isWithinScanTime(now);
-    const attendance = await this.prisma.learnerAttendance.create({
-      data: {
-        date: today,
-        isPresent: true,
-        scanTime: now,
-        isLate,
-        learnerId: learner.id,
-        status: isLate ? "TO_JUSTIFY" : "PENDING",
-      },
-    });
-
-    return {
-      type: "LEARNER",
-      scanTime: attendance.scanTime,
-      attendanceStatus: isLate ? "LATE" : "PRESENT",
-      isAlreadyScanned: false,
-      learner: {
-        id: learner.id,
-        matricule: learner.matricule,
-        firstName: learner.firstName,
-        lastName: learner.lastName,
-        photoUrl: learner.photoUrl,
-        referential: learner.referential,
-        promotion: learner.promotion,
-      },
-    };
+    return this.saveLearnerScan(learner, now, today, isLate);
   }
 
   public async scanCoach(matricule: string): Promise<CoachScanResponse> {
