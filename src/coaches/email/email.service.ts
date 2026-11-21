@@ -23,10 +23,11 @@ export class EmailService {
     });
   } else {
     // Utiliser Gmail/SMTP classique
+    const port = Number(this.configService.get('SMTP_PORT', 587));
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('SMTP_HOST', 'smtp.gmail.com'),
-      port: this.configService.get('SMTP_PORT', 587),
-      secure: false,
+      port,
+      secure: port === 465,
       auth: {
         user: this.configService.get('SMTP_USER'),
         pass: this.configService.get('SMTP_PASS'),
