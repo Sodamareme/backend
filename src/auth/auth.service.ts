@@ -52,12 +52,28 @@ export class AuthService {
       role: emailExist.role 
     });
 
+    let displayName: string | undefined;
+    if (emailExist.role === 'VIGIL') {
+      const profile = await this.prisma.vigil.findUnique({
+        where: { userId: emailExist.id },
+        select: { firstName: true },
+      });
+      displayName = profile?.firstName.trim() || undefined;
+    } else if (emailExist.role === 'RESTAURATEUR') {
+      const profile = await this.prisma.restaurateur.findUnique({
+        where: { userId: emailExist.id },
+        select: { firstName: true },
+      });
+      displayName = profile?.firstName.trim() || undefined;
+    }
+
     return {
       access_token: token,
       user: {
         id: emailExist.id,
         email: emailExist.email,
         role: emailExist.role,
+        ...(displayName ? { name: displayName } : {}),
       },
     };
   }
